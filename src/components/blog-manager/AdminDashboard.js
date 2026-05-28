@@ -603,26 +603,7 @@ const [mounted, setMounted] = useState(false);
                <Icons.Refresh />
              </button>
 
-             {/* 新增：登陆按钮 */}
-              <button 
-                onClick={() => window.open('https://van.pro-plus.top/dashboard', '_blank')} 
-                style={{
-                  background: '#3b82f6', // 使用蓝色，保持低调且专业
-                  border: 'none', 
-                  padding: '10px 20px', 
-                  borderRadius: '8px', 
-                  color: '#fff', 
-                  cursor: 'pointer', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '5px', 
-                  fontWeight: 'bold', 
-                  fontSize: '14px'
-                }} 
-                className="btn-ia"
-              >
-                <span style={{fontSize: '16px'}}>🌱</span> 寄售
-              </button>
+
 
                            {/* 新增：网盘按钮 */}
               <button 
