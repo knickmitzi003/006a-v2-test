@@ -642,7 +642,7 @@ const [mounted, setMounted] = useState(false);
 
   // 🟢 5. 处理函数
   const handleThemeChange = async (version) => {
-    if (isThemeLoading || version === activeThemeLocal) return;
+    if (isThemeLoading || version === currentActiveTheme) return;
     const configItem = themeConfig || posts.find(p => p.slug === 'theme-config');
     if (!configItem) { alert("未找到配置页"); return; }
     setIsThemeLoading(true);

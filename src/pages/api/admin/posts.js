@@ -43,6 +43,7 @@ export default async function handler(req, res) {
         id: page.id,
         title: p.title?.title?.[0]?.plain_text || p.Page?.title?.[0]?.plain_text || '无标题',
         slug: p.slug?.rich_text?.[0]?.plain_text || p.Slug?.rich_text?.[0]?.plain_text || '',
+        excerpt: p.excerpt?.rich_text?.[0]?.plain_text || p.Excerpt?.rich_text?.[0]?.plain_text || '',
         category: catName,
         tags: tagNames.join(','),
         status: p.status?.status?.name || p.status?.select?.name || 'Published',
