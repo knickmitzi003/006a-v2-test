@@ -613,6 +613,21 @@ const [mounted, setMounted] = useState(false);
        (form?.category?.trim() || '') !== '' &&
        (form?.date || '') !== '');
 
+  // 找出第一个未完成的必填项，用于灰色按钮被点击时的提示
+  const getMissingFieldMsg = () => {
+    if ((form?.title?.trim() || '') === '') return form?.type === 'Widget' ? '请填写组件标题' : '请填写文章标题';
+    if (form?.type === 'Widget') return '';
+    if ((form?.category?.trim() || '') === '') return '请填写文章分类';
+    if ((form?.date || '') === '') return '请选择发布日期';
+    return '';
+  };
+  // 统一的"尝试保存"：无效时弹出具体缺失项提示，有效时才真正保存
+  const attemptSave = () => {
+    const msg = getMissingFieldMsg();
+    if (msg) { alert('⚠️ ' + msg); return; }
+    handleSave();
+  };
+
   // 🟢 3. 主题状态计算
   const themeConfig = posts?.find(p => p.slug === 'theme-config');
   const currentActiveTheme = activeThemeLocal || themeConfig?.excerpt?.trim() || 'v1';
@@ -1250,7 +1265,7 @@ const [mounted, setMounted] = useState(false);
                 <div><label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'5px'}}>摘要</label><textarea className="glow-input" value={form.excerpt} onChange={e=>setForm({...form, excerpt:e.target.value})} placeholder="组件简介..." style={{minHeight:'90px'}} /></div>
               </div>
             </div>
-            <button onClick={handleSave} disabled={!isFormValid} style={{width:'100%', padding:'20px', background:isFormValid?'#fff':'#222', color:isFormValid?'#000':'#666', border:'none', borderRadius:'12px', fontWeight:'bold', fontSize:'16px', marginTop:'40px', cursor:isFormValid?'pointer':'not-allowed', transition:'0.3s'}}>保存修改</button>
+            <button onClick={attemptSave} title={isFormValid ? '' : (getMissingFieldMsg() || '')} style={{width:'100%', padding:'20px', background:isFormValid?'#fff':'#222', color:isFormValid?'#000':'#666', border:'none', borderRadius:'12px', fontWeight:'bold', fontSize:'16px', marginTop:'40px', cursor:'pointer', transition:'0.3s'}}>保存修改</button>
           </div>
         ) : (
           /* 这里是之前的表单编辑代码... */
@@ -1313,7 +1328,7 @@ const [mounted, setMounted] = useState(false);
               <div className="fab-btn" onClick={() => window.scrollTo({top:99999, behavior:'smooth'})}><Icons.ArrowDown /></div>
             </div>
 
-            <button onClick={handleSave} disabled={!isFormValid} style={{width:'100%', padding:'20px', background:isFormValid?'#fff':'#222', color:isFormValid?'#000':'#666', border:'none', borderRadius:'12px', fontWeight:'bold', fontSize:'16px', marginTop:'40px', cursor:isFormValid?'pointer':'not-allowed', transition:'0.3s'}}>{currentId ? '保存修改' : '确认发布'}</button>
+            <button onClick={attemptSave} title={isFormValid ? '' : (getMissingFieldMsg() || '')} style={{width:'100%', padding:'20px', background:isFormValid?'#fff':'#222', color:isFormValid?'#000':'#666', border:'none', borderRadius:'12px', fontWeight:'bold', fontSize:'16px', marginTop:'40px', cursor:'pointer', transition:'0.3s'}}>{currentId ? '保存修改' : '确认发布'}</button>
           </div>
         )}
         {previewData && <div className="modal-bg" onClick={()=>setPreviewData(null)}><div className="modal-box" onClick={e=>e.stopPropagation()}><div style={{padding:'20px 25px', borderBottom:'1px solid #333', display:'flex', justifyContent:'space-between', alignItems:'center'}}><strong>预览: {previewData.title}</strong><button onClick={()=>setPreviewData(null)} style={{background:'none', border:'none', color:'#666', fontSize:'24px', cursor:'pointer'}}>×</button></div><div className="modal-body"><NotionView blocks={previewData.rawBlocks} /></div></div></div>}
