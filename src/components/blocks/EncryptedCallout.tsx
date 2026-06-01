@@ -78,20 +78,20 @@ export const EncryptedCallout = ({ block, children }: { block: any; children: an
 
   // --- 状态 B: 未解锁 (稳定版 UI) ---
   return (
-    <div className="relative my-8 overflow-hidden rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-[#181818] shadow-xl">
+    <div className="gallery-encrypted-panel relative my-8 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06)] dark:border-neutral-800 dark:bg-[#181818] dark:shadow-xl">
       
       {/* 静态背景 (移除复杂动画，防止闪烁) */}
-      <div className="absolute inset-0 bg-neutral-50 dark:bg-[#121212]"></div>
+      <div className="gallery-encrypted-panel__bg absolute inset-0 bg-neutral-50 dark:bg-[#121212]"></div>
       <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-[80px] pointer-events-none"></div>
       <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-[80px] pointer-events-none"></div>
 
       <div className="relative z-10 py-10 px-6 flex flex-col items-center justify-center text-center select-none">
         
-        <h3 className="font-extrabold text-2xl mb-3 text-neutral-900 dark:text-white">
+        <h3 className="font-gallery mb-3 text-xl font-semibold text-neutral-900 dark:text-white sm:text-2xl">
           {hasPassword ? '受保护的内容' : '敏感内容'}
         </h3>
         
-        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6 max-w-xs leading-relaxed">
+        <p className="font-gallery mb-6 max-w-xs text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
           {hasPassword 
             ? '该区域包含加密内容，请输入密码解锁。' 
             : '该区域可能包含敏感内容。'}
@@ -105,13 +105,11 @@ export const EncryptedCallout = ({ block, children }: { block: any; children: an
               type="password" 
               placeholder="请输入密码..."
               className={`
-                flex-1 px-4 py-2.5 rounded-xl 
-                text-neutral-900 dark:text-white
-                bg-white dark:bg-neutral-900 
-                border-2 transition-all outline-none
+                flex-1 rounded-xl border-2 bg-white px-4 py-2.5 font-gallery text-neutral-900 outline-none transition-all
+                dark:bg-neutral-900 dark:text-white
                 ${error 
                   ? 'border-red-500 focus:border-red-500' 
-                  : 'border-transparent focus:border-blue-500 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                  : 'border-neutral-200 focus:border-neutral-900 hover:border-neutral-300 dark:border-transparent dark:focus:border-blue-500 dark:hover:bg-neutral-800'
                 }
               `}
               value={input}
@@ -127,11 +125,9 @@ export const EncryptedCallout = ({ block, children }: { block: any; children: an
           <button 
             onClick={handleUnlock}
             className={`
-              px-6 py-2.5 rounded-xl font-bold text-white whitespace-nowrap transition-all shadow-lg active:scale-95
-              ${hasPassword 
-                ? 'bg-blue-600 hover:bg-blue-500' 
-                : 'bg-blue-600 hover:bg-red-500 w-full sm:w-auto' // 无密码时用红色警示色，且显眼
-              }
+              gallery-encrypted-panel__unlock whitespace-nowrap rounded-xl bg-neutral-900 px-6 py-2.5 font-gallery text-sm font-semibold text-white shadow-sm transition-all
+              hover:bg-neutral-700 active:scale-95 dark:bg-blue-600 dark:hover:bg-blue-500
+              ${!hasPassword ? 'w-full sm:w-auto' : ''}
             `}
           >
             {hasPassword ? '解锁' : '显示内容'}

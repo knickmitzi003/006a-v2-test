@@ -1,4 +1,5 @@
 import { Client } from '@notionhq/client';
+import { readPinnedFromNotionProperties } from '@/src/lib/blog/pinnedPosts';
 
 export default async function handler(req, res) {
   const notion = new Client({ auth: process.env.NOTION_KEY || process.env.NOTION_TOKEN });
@@ -50,13 +51,23 @@ export default async function handler(req, res) {
         type: p.type?.select?.name || p.Type?.select?.name || 'Post',
         date: p.date?.date?.start || p.Date?.date?.start || '',
         cover: p.cover?.url || p.cover?.file?.url || p.cover?.external?.url || '',
-        download: p.download?.url || ''
+        pinned: readPinnedFromNotionProperties(p),
+        download: (p.download?.type === 'rich_text'
+          ? (p.download.rich_text || []).map((t) => t.plain_text).join('')
+          : p.download?.url) || ''
       };
+    });
+
+    const pinnedFirst = [...posts].sort((a, b) => {
+      const ap = a.pinned ? 1 : 0;
+      const bp = b.pinned ? 1 : 0;
+      if (ap !== bp) return bp - ap;
+      return String(b.date).localeCompare(String(a.date));
     });
 
     res.status(200).json({ 
       success: true, 
-      posts,
+      posts: pinnedFirst,
       options: {
         categories: Array.from(categories),
         tags: Array.from(tags)

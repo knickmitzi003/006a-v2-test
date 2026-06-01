@@ -14,8 +14,7 @@ export const WidgetCollection = ({
       {/* 左侧：Profile 组件 (保持不变) */}
       <ProfileWidget data={widgets.profile} />
       
-      {/* 右侧：公告板 (改为传递 announcement 数据) */}
-      {/* 逻辑说明：如果 Notion 中配置正确，widgets 对象里会自动包含 announcement */}
+      {/* 右侧：魔改公告卡（数据须为 slug=announcement 的文章，由 loadHomeWidgets 注入） */}
       <StatsWidget data={widgets.announcement} />
     </div>
   )

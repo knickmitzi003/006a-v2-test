@@ -1,5 +1,6 @@
 import { Client } from '@notionhq/client';
 import { NotionToMarkdown } from 'notion-to-md';
+import { readPinnedFromNotionProperties } from '@/src/lib/blog/pinnedPosts';
 
 const notion = new Client({
   auth: process.env.NOTION_KEY || process.env.NOTION_TOKEN,
@@ -28,6 +29,31 @@ const withRetry = async (fn, retries = 4) => {
   }
   throw lastErr;
 };
+
+/** 读取 Notion download 字段（支持 rich_text；兼容旧 url 类型） */
+function readDownloadProperty(prop) {
+  if (!prop) return '';
+  if (prop.type === 'rich_text') {
+    return (prop.rich_text || []).map((t) => t.plain_text).join('');
+  }
+  if (prop.type === 'url') {
+    return prop.url || '';
+  }
+  return '';
+}
+
+/** 按数据库属性类型写入 download */
+function buildDownloadProperty(value, targetProp) {
+  const text = typeof value === 'string' ? value : '';
+  const propType = targetProp?.type || 'rich_text';
+  if (propType === 'rich_text') {
+    return { rich_text: text ? [{ text: { content: text } }] : [] };
+  }
+  if (propType === 'url') {
+    return text.startsWith('http') ? { url: text } : { url: null };
+  }
+  return { rich_text: text ? [{ text: { content: text } }] : [] };
+}
 
 // === 1. 解析器 (保留洗链、视频/图片、代码块逻辑) ===
 function parseLinesToChildren(text) {
@@ -218,6 +244,37 @@ async function notionToEditorBlocks(blocks) {
   return merged;
 }
 
+function getPinnedPropertyKey(targetProps) {
+  if (targetProps.pinned?.type === 'checkbox') return 'pinned';
+  if (targetProps.Pinned?.type === 'checkbox') return 'Pinned';
+  return null;
+}
+
+async function unpinAllExcept(notion, databaseId, exceptId, pinKey) {
+  let cursor;
+  do {
+    const response = await withRetry(() =>
+      notion.databases.query({
+        database_id: databaseId,
+        filter: { property: pinKey, checkbox: { equals: true } },
+        page_size: 100,
+        start_cursor: cursor,
+      })
+    );
+    for (const page of response.results) {
+      if (page.id !== exceptId) {
+        await withRetry(() =>
+          notion.pages.update({
+            page_id: page.id,
+            properties: { [pinKey]: { checkbox: false } },
+          })
+        );
+      }
+    }
+    cursor = response.has_more ? response.next_cursor : undefined;
+  } while (cursor);
+}
+
 export default async function handler(req, res) {
   const { id: queryId } = req.query;
   const databaseId = process.env.NOTION_DATABASE_ID || process.env.NOTION_PAGE_ID;
@@ -242,7 +299,34 @@ export default async function handler(req, res) {
       try { const blocksRes = await withRetry(() => notion.blocks.children.list({ block_id: queryId })); rawBlocks = blocksRes.results; } catch (e) {}
       let editorBlocks = [];
       try { editorBlocks = await notionToEditorBlocks(rawBlocks); } catch (e) { editorBlocks = []; }
-      return res.status(200).json({ success: true, post: { id: page.id, title: p.title?.title?.[0]?.plain_text || p.Page?.title?.[0]?.plain_text || '无标题', slug: p.slug?.rich_text?.[0]?.plain_text || '', excerpt: p.excerpt?.rich_text?.[0]?.plain_text || '', category: p.category?.select?.name || '', tags: (p.tags?.multi_select || []).map(t => t.name).join(','), status: p.status?.status?.name || p.status?.select?.name || 'Published', type: p.type?.select?.name || 'Post', date: p.date?.date?.start || '', cover: p.cover?.url || p.cover?.file?.url || p.cover?.external?.url || '', download: p.download?.url || '', content: cleanContent, rawBlocks: rawBlocks, editorBlocks: editorBlocks } });
+      return res.status(200).json({ success: true, post: { id: page.id, title: p.title?.title?.[0]?.plain_text || p.Page?.title?.[0]?.plain_text || '无标题', slug: p.slug?.rich_text?.[0]?.plain_text || '', excerpt: p.excerpt?.rich_text?.[0]?.plain_text || '', category: p.category?.select?.name || '', tags: (p.tags?.multi_select || []).map(t => t.name).join(','), status: p.status?.status?.name || p.status?.select?.name || 'Published', type: p.type?.select?.name || 'Post', date: p.date?.date?.start || '', cover: p.cover?.url || p.cover?.file?.url || p.cover?.external?.url || '', pinned: readPinnedFromNotionProperties(p), download: readDownloadProperty(p.download), content: cleanContent, rawBlocks: rawBlocks, editorBlocks: editorBlocks } });
+    }
+
+    if (req.method === 'PATCH') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      const pageId = queryId || body.id;
+      const { pinned } = body;
+      if (!pageId || pinned === undefined) {
+        return res.status(400).json({ success: false, error: '缺少 id 或 pinned' });
+      }
+      const page = await withRetry(() => notion.pages.retrieve({ page_id: pageId }));
+      const pinKey = getPinnedPropertyKey(page.properties);
+      if (!pinKey) {
+        return res.status(400).json({
+          success: false,
+          error: '请先在 Notion 数据库添加 Checkbox 类型属性「pinned」',
+        });
+      }
+      if (pinned) {
+        await unpinAllExcept(notion, databaseId, pageId, pinKey);
+      }
+      await withRetry(() =>
+        notion.pages.update({
+          page_id: pageId,
+          properties: { [pinKey]: { checkbox: !!pinned } },
+        })
+      );
+      return res.status(200).json({ success: true, pinned: !!pinned });
     }
 
     if (req.method === 'POST') {
@@ -288,7 +372,7 @@ export default async function handler(req, res) {
           props["cover"] = (typeof cover === 'string' && cover.startsWith('http')) ? { url: cover } : { url: null };
       }
       if (download !== undefined) {
-          props["download"] = (typeof download === 'string' && download.startsWith('http')) ? { url: download } : { url: null };
+          props['download'] = buildDownloadProperty(download, targetProps['download']);
       }
 
       if (id) {

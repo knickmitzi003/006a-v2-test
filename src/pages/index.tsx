@@ -1,44 +1,31 @@
 import { GetStaticProps, GetStaticPropsContext, NextPage } from 'next'
-import ContainerLayout from '../components/post/ContainerLayout'
-import { WidgetCollection } from '../components/section/WidgetCollection'
 import withNavFooter from '../components/withNavFooter'
 import { formatPosts } from '../lib/blog/format/post'
-import { formatWidgets, preFormatWidgets } from '../lib/blog/format/widget'
-import getBlogStats from '../lib/blog/getBlogStats'
+import { loadHomeWidgets } from '../lib/blog/loadHomeWidgets'
 import { withNavFooterStaticProps } from '../lib/blog/withNavFooterStaticProps'
-import { getWidgets, getPosts, getRemoteTheme } from '../lib/notion/getBlogData'
-
-import { MainPostsCollection } from '../components/section/MainPostsCollection'
-import { MorePostsCollection } from '../components/section/MorePostsCollection'
+import { capHomePosts, BLOG_HOME_POSTS_MAX } from '../lib/blog/postLimits'
+import { ANNOUNCEMENT_SLUG } from '../lib/blog/pinnedPosts'
+import { getLimitPosts } from '../lib/notion/getDatabase'
 import { Post, SharedNavFooterStaticProps } from '../types/blog'
 import { ApiScope } from '../types/notion'
-
-// 导入 Touchgal 主题布局
-import { TouchgalLayout } from '../components/section/TouchgalLayout'
+import { themeFromEnv } from '../themes/getActiveTheme'
+import { getThemeHomeComponent } from '../themes/registry'
+import { ThemeId } from '../themes/types'
 
 const Home: NextPage<{
   posts: Post[]
-  widgets: { [key: string]: any }
-  activeTheme: string
-}> = ({ posts, widgets, activeTheme }) => {
-  
-  const theme = activeTheme || process.env.NEXT_PUBLIC_THEME || 'anzifan'
-  const isTouchgal = theme.toLowerCase() === 'touchgal'
-
-  if (isTouchgal) {
-    return <TouchgalLayout posts={posts} widgets={widgets} />
-  }
-
+  widgets: { [key: string]: unknown }
+  activeTheme: ThemeId
+}> = ({ posts, widgets, activeTheme, siteTitle, navPages }) => {
+  const themeId = activeTheme || themeFromEnv() || 'anzifan'
+  const HomeView = getThemeHomeComponent(themeId)
   return (
-    <>
-      <ContainerLayout>
-        <WidgetCollection widgets={widgets} />
-        <div data-aos="fade-up" data-aos-delay={300}>
-          <MainPostsCollection posts={posts} />
-        </div>
-      </ContainerLayout>
-      <MorePostsCollection posts={posts} />
-    </>
+    <HomeView
+      posts={posts}
+      widgets={widgets}
+      siteTitle={siteTitle}
+      navPages={navPages}
+    />
   )
 }
 
@@ -48,30 +35,23 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     sharedPageStaticProps: SharedNavFooterStaticProps
   ) => {
     try {
-      const remoteTheme = await getRemoteTheme()
-      const postsRaw = await getPosts(ApiScope.Archive)
-      let allFormattedPosts = await formatPosts(postsRaw)
+      const postsRaw = await getLimitPosts(BLOG_HOME_POSTS_MAX, ApiScope.Archive)
+      let allFormattedPosts = capHomePosts(await formatPosts(postsRaw))
 
       if (!allFormattedPosts || allFormattedPosts.length === 0) {
-        const backupPosts = (sharedPageStaticProps.props.navPages as any[]) || []
-        allFormattedPosts = backupPosts.filter(p => p.type === 'Post')
+        const backupPosts = (sharedPageStaticProps.props.navPages as unknown as { type?: string; slug?: string }[]) || []
+        allFormattedPosts = backupPosts.filter((p) => p.type === 'Post') as Post[]
       }
 
-      const announcementPost = allFormattedPosts.find(p => p.slug === 'announcement') || null
-      const filteredPosts = allFormattedPosts.filter(p => p.slug !== 'announcement')
+      const announcementPost =
+        allFormattedPosts.find((p) => p.slug === ANNOUNCEMENT_SLUG) || null
+      const filteredPosts = allFormattedPosts.filter(
+        (p) => p.slug !== ANNOUNCEMENT_SLUG
+      )
 
-      const blogStats = await getBlogStats()
-      const rawWidgets = await getWidgets()
-      const preFormattedWidgets = await preFormatWidgets(rawWidgets)
-      const formattedWidgets = await formatWidgets(preFormattedWidgets, blogStats)
-
-      const safeWidgets = formattedWidgets as any
-      if (safeWidgets && safeWidgets.profile) {
-        if (safeWidgets.profile.links === undefined) safeWidgets.profile.links = null
-      }
-      if (safeWidgets) {
-        safeWidgets.announcement = announcementPost
-      }
+      const safeWidgets = await loadHomeWidgets({
+        announcement: announcementPost,
+      })
 
       const finalProps = JSON.parse(JSON.stringify(sharedPageStaticProps.props))
       const finalPosts = JSON.parse(JSON.stringify(filteredPosts))
@@ -82,14 +62,19 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
           ...finalProps,
           posts: finalPosts,
           widgets: finalWidgets,
-          activeTheme: remoteTheme || 'anzifan',
         },
         revalidate: 1,
       }
     } catch (e) {
       console.error('Index page build failed:', e)
+      const base = JSON.parse(JSON.stringify(sharedPageStaticProps.props))
       return {
-        props: { ...JSON.parse(JSON.stringify(sharedPageStaticProps.props)), posts: [], widgets: {}, activeTheme: 'anzifan' },
+        props: {
+          ...base,
+          posts: [],
+          widgets: {},
+          // 保留 sharedPageStaticProps 中的 activeTheme，由 withNavFooter 末尾再次校正
+        },
         revalidate: 1,
       }
     }

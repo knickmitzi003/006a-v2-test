@@ -47,6 +47,7 @@ export default {
   content: [
     './src/pages/**/*.{js,jsx,ts,tsx}',
     './src/components/**/*.{js,jsx,ts,tsx}',
+    './src/themes/**/*.{js,jsx,ts,tsx}',
     './src/lib/colors.ts',
   ],
   theme: {
@@ -54,6 +55,19 @@ export default {
       sans: ['Overpass', ...defaultTheme.fontFamily.sans],
       serif: ['"Old Standard TT"', ...defaultTheme.fontFamily.serif],
       mono: ['"Overpass Mono"', ...defaultTheme.fontFamily.mono],
+      gallery: [
+        'Inter',
+        '"Noto Sans SC"',
+        'ui-sans-serif',
+        'system-ui',
+        '-apple-system',
+        'BlinkMacSystemFont',
+        '"Segoe UI"',
+        'PingFang SC',
+        'Hiragino Sans GB',
+        'Microsoft YaHei',
+        'sans-serif',
+      ],
     },
     screens: {
       // 'xs': '350px',

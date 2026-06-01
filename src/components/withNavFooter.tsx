@@ -1,3 +1,4 @@
+import { GalleryShell } from '@/src/themes/gallery/GalleryShell'
 import { Page, SharedNavFooterStaticProps } from '@/src/types/blog'
 import Footer from './footer/Footer'
 import Navbar from './nav/Navbar'
@@ -7,7 +8,15 @@ export default function withNavFooter(
   pureFooter?: boolean,
   showBeian?: boolean
 ) {
-  return function withNavFooter(props: SharedNavFooterStaticProps['props']) {
+  return function WithNavFooterWrapper(props: SharedNavFooterStaticProps['props'] & { activeTheme?: string }) {
+    if (props.activeTheme === 'gallery') {
+      return (
+        <GalleryShell siteTitle={props.siteTitle}>
+          <WrappedComponent {...props} />
+        </GalleryShell>
+      )
+    }
+
     const items = props.navPages.filter(
       (item: Page) => item.status === 'Published'
     )

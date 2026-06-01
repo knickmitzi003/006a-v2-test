@@ -12,6 +12,28 @@ import { ApiScope } from './../../types/notion'
 import { filterSwitch } from './filter'
 import { databaseId, notion } from './notion'
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const isTransient = (e: unknown) => {
+  const msg = String((e as Error)?.message || '')
+  const code = String((e as { code?: string })?.code || '')
+  return /ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|socket hang up|network|fetch failed|aborted/i.test(msg)
+    || /ECONNRESET|ETIMEDOUT|EAI_AGAIN|ECONNREFUSED|ENOTFOUND/i.test(code)
+}
+
+async function withRetry<T>(fn: () => Promise<T>, retries = 4): Promise<T> {
+  let lastErr: unknown
+  for (let i = 0; i < retries; i++) {
+    try { return await fn() }
+    catch (e) {
+      lastErr = e
+      if (!isTransient(e) || i === retries - 1) throw e
+      await sleep(500 * Math.pow(2, i))
+    }
+  }
+  throw lastErr
+}
+
 // TODO: Refactor this to use the Utility functions `iteratePaginatedAPI` & `collectPaginatedAPI`  in @notionhq/client
 
 export const getDatabase = async (
@@ -21,7 +43,7 @@ export const getDatabase = async (
 ): Promise<QueryDatabaseResponse> => {
   const filter = scope ? filterSwitch(scope) : undefined
 
-  const response = await notion.databases.query({
+  const response = await withRetry(() => notion.databases.query({
     database_id: id ?? databaseId,
     filter: filter,
     sorts: id
@@ -33,7 +55,7 @@ export const getDatabase = async (
         ]
       : [{ property: 'date', direction: 'descending' }],
     start_cursor: cursor,
-  })
+  }))
 
   return response
 }
@@ -86,7 +108,7 @@ export const getLimitPosts = async (
 }
 
 export const getDatabaseMetadata = async (): Promise<GetDatabaseResponse> => {
-  const response = await notion.databases.retrieve({ database_id: databaseId })
+  const response = await withRetry(() => notion.databases.retrieve({ database_id: databaseId }))
   return response
 }
 

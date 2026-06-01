@@ -5,6 +5,7 @@ import BlogLayout, {
 import { Section404 } from '@/src/components/section/Section404'
 import { SubCollection } from '@/src/components/section/SubCollection'
 import withNavFooter from '@/src/components/withNavFooter'
+import { GalleryFilteredPosts } from '@/src/themes/gallery/GalleryFilteredPosts'
 import { formatPosts } from '@/src/lib/blog/format/post'
 import { getAllTags } from '@/src/lib/blog/format/tag'
 import { withNavFooterStaticProps } from '@/src/lib/blog/withNavFooterStaticProps'
@@ -60,14 +61,32 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
   }
 )
 
-const TagPage: NextPage<{ tag: Tag; posts: Post[]; subTitle: Title }> = ({
-  tag,
-  posts,
-  subTitle,
-}) => {
+const TagPage: NextPage<{
+  tag: Tag
+  posts: Post[]
+  subTitle: Title
+  activeTheme?: string
+}> = ({ tag, posts, subTitle, activeTheme }) => {
   if (!tag) return <Section404 />
 
   tag.count = posts.length
+
+  if (activeTheme === 'gallery') {
+    const parentLabel = subTitle?.text || 'Cosers'
+    const parentHref = subTitle?.slug ? `/${subTitle.slug}` : `/${TAG}`
+    return (
+      <GalleryFilteredPosts
+        posts={posts}
+        title={tag.name}
+        breadcrumbItems={[
+          { label: '首页', href: '/' },
+          { label: parentLabel, href: parentHref },
+          { label: tag.name },
+        ]}
+        emptyLabel="该标签下暂无文章"
+      />
+    )
+  }
 
   return (
     <SubCollection item={tag} posts={posts} subTitle={subTitle} type={'tag'} />
@@ -77,6 +96,9 @@ const TagPage: NextPage<{ tag: Tag; posts: Post[]; subTitle: Title }> = ({
 const withNavPage = withNavFooter(TagPage, true)
 
 ;(withNavPage as NextPageWithLayout).getLayout = (page) => {
+  if ((page.props as { activeTheme?: string })?.activeTheme === 'gallery') {
+    return page
+  }
   if (!page.props.tag) return <BlogLayout>{page}</BlogLayout>
   const color = page.props.tag.color
   return color !== 'gray' && color !== 'default' ? (

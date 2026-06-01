@@ -10,10 +10,12 @@ import PostNavigation from '../../components/post/PostNavigation'
 import CommentSection from '../../components/section/CommentSection'
 import { Section404 } from '../../components/section/Section404'
 import withNavFooter from '../../components/withNavFooter'
+import { GalleryPost } from '@/src/themes/gallery/GalleryPost'
 import { formatBlocks } from '../../lib/blog/format/block'
 import { formatPosts, getNavigationInfo } from '../../lib/blog/format/post'
 import { withNavFooterStaticProps } from '../../lib/blog/withNavFooterStaticProps'
 import { getAllBlocks } from '../../lib/notion/getBlocks'
+import { BLOG_STATIC_POST_PATHS_MAX } from '../../lib/blog/postLimits'
 import { getPosts } from '../../lib/notion/getBlogData'
 import { addSubTitle } from '../../lib/util'
 import { NextPageWithLayout, PartialPost, Post, SharedNavFooterStaticProps } from '../../types/blog'
@@ -23,10 +25,9 @@ export const getStaticPaths = async () => {
   const postsRaw = await getPosts(ApiScope.Archive)
   const formattedPosts = await formatPosts(postsRaw)
   
-  // 🟢 极速部署核心：限制最多只预渲染最新的 100 篇文章
-  // 部署时间将被死死封印在 100 篇的工作量内，绝不会再超时
+  // 构建期仅预渲染最新 N 篇，其余走 fallback: blocking（见 blog.config STATIC_POST_PATHS_MAX）
   const paths = formattedPosts
-    .slice(0, 80)
+    .slice(0, BLOG_STATIC_POST_PATHS_MAX)
     .map((post) => ({
       params: { post: post.slug },
     }))
@@ -85,13 +86,17 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
   }
 )
 
-const PostPage: NextPage<{ 
-  post: Post; 
-  blocks: BlockResponse[]; 
-  navigation: { previousPost: PartialPost; nextPost: PartialPost } 
-}> = ({ post, blocks, navigation }) => {
-  
+const PostPage: NextPage<{
+  post: Post
+  blocks: BlockResponse[]
+  navigation: { previousPost: PartialPost; nextPost: PartialPost }
+  activeTheme?: string
+}> = ({ post, blocks, navigation, activeTheme }) => {
   if (!post) return <Section404 />
+
+  if (activeTheme === 'gallery') {
+    return <GalleryPost post={post} blocks={blocks} navigation={navigation} />
+  }
 
   return (
     <>

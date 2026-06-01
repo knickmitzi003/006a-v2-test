@@ -5,6 +5,7 @@ import ContainerLayout from '@/src/components/post/ContainerLayout'
 import { CategoriesCollection } from '@/src/components/section/CategoriesCollection'
 import { Section404 } from '@/src/components/section/Section404'
 import withNavFooter from '@/src/components/withNavFooter'
+import { GalleryCategoryIndex } from '@/src/themes/gallery/GalleryCategoryIndex'
 import { getCategoriesInfo } from '@/src/lib/blog/format/category'
 import { formatPosts } from '@/src/lib/blog/format/post'
 import { withNavFooterStaticProps } from '@/src/lib/blog/withNavFooterStaticProps'
@@ -51,8 +52,13 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
 const Categories: NextPage<{
   page: Page
   categories: Category[]
-}> = ({ page, categories }) => {
+  activeTheme?: string
+}> = ({ page, categories, activeTheme }) => {
   if (!page) return <Section404 />
+
+  if (activeTheme === 'gallery') {
+    return <GalleryCategoryIndex page={page} categories={categories} />
+  }
 
   const { title } = page
 
@@ -66,8 +72,11 @@ const Categories: NextPage<{
 
 const withNavPage = withNavFooter(Categories)
 
-;(withNavPage as NextPageWithLayout).getLayout = (page) => (
-  <BlogLayoutPure>{page}</BlogLayoutPure>
-)
+;(withNavPage as NextPageWithLayout).getLayout = (page) => {
+  if ((page.props as { activeTheme?: string })?.activeTheme === 'gallery') {
+    return page
+  }
+  return <BlogLayoutPure>{page}</BlogLayoutPure>
+}
 
 export default withNavPage

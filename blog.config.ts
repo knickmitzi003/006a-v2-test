@@ -15,6 +15,10 @@ interface BlogConfig {
   }
   // 归档页每页显示的数量
   ARCHIVE_PER_COUNT: number
+  /** 首页 SSG 最多格式化/下发的文章数（防 Vercel 超时，全主题共用） */
+  HOME_BUILD_POSTS_MAX?: number
+  /** 构建时预生成的文章详情路径数 */
+  STATIC_POST_PATHS_MAX?: number
   // public 下图标目录
   ICON_PATH: string
   // 默认特殊页面对应的 slug
@@ -73,6 +77,12 @@ interface BlogConfig {
   }
   // 是否开启 Draft Dialog
   ENABLE_DRAFT_DIALOG?: boolean
+  /** Gallery 主题侧栏「登录」按钮跳转地址 */
+  GALLERY_LOGIN_URL?: string
+  /** Album / 使用说明 → 关于页 */
+  GALLERY_GUIDE_PATH?: string
+  /** Album / Models → 更多内容 */
+  GALLERY_MORE_PATH?: string
 }
 
 const CONFIG: BlogConfig = {
@@ -94,6 +104,8 @@ const CONFIG: BlogConfig = {
     MORE: 6,
   },
   ARCHIVE_PER_COUNT: 10,
+  HOME_BUILD_POSTS_MAX: 80,
+  STATIC_POST_PATHS_MAX: 80,
   ICON_PATH: '/icons',
   DEFAULT_SPECIAL_PAGES: {
     TAG: 'tag',
@@ -135,6 +147,10 @@ const CONFIG: BlogConfig = {
     },
   },
   ENABLE_DRAFT_DIALOG: true,
+  // Gallery 主题登录按钮链接（可自行修改）
+  GALLERY_LOGIN_URL: '#',
+  GALLERY_GUIDE_PATH: '/about',
+  GALLERY_MORE_PATH: '/friends',
 }
 
 export default CONFIG

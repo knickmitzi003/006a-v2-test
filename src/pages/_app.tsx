@@ -12,6 +12,10 @@ import { event, GoogleAnalytics } from 'nextjs-google-analytics'
 import NextNprogress from 'nextjs-progressbar'
 import Script from 'next/script' // 1. 引入 Next.js 脚本组件
 import { useEffect } from 'react'
+import {
+  AdminFaviconLinks,
+  GalleryFaviconLinks,
+} from '@/src/themes/gallery/GalleryFaviconLinks'
 import { NextPageWithLayout } from '../types/blog'
 
 type AppPropsWithLayout = AppProps & {
@@ -20,6 +24,9 @@ type AppPropsWithLayout = AppProps & {
 
 function BlogApp({ Component, pageProps, router }: AppPropsWithLayout) {
   console.log(pageProps,"-----------pageProps----------")
+  const activeTheme = (pageProps as { activeTheme?: string })?.activeTheme
+  const isAdminRoute =
+    router.pathname === '/admin' || router.pathname.startsWith('/admin/')
   const getLayout =
     Component.getLayout ?? ((page) => <BlogLayout>{page}</BlogLayout>)
 
@@ -103,24 +110,14 @@ function BlogApp({ Component, pageProps, router }: AppPropsWithLayout) {
         />
         <title>{pageProps?.siteTitle?.text}</title>
         <meta name="description" content="PRO+" />
-        <link
-          rel="apple-touch-icon"
-          sizes="180x180"
-          href="/apple-touch-icon.png"
-        />
-        <link
-          rel="icon"
-          type="image/png"
-          sizes="32x32"
-          href="/favicon-32x32.png"
-        />
-        <link
-          rel="icon"
-          type="image/png"
-          sizes="16x16"
-          href="/favicon-16x16.png"
-        />
-        <link rel="manifest" href="/site.webmanifest" />
+        {isAdminRoute ? (
+          <AdminFaviconLinks />
+        ) : (
+          <GalleryFaviconLinks activeTheme={activeTheme} />
+        )}
+        {!isAdminRoute && activeTheme !== 'gallery' ? (
+          <link rel="manifest" href="/site.webmanifest" />
+        ) : null}
       </Head>
       <NextNprogress
         color={CONFIG.PROGRESS_BAR_COLOR}

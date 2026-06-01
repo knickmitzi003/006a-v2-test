@@ -1,0 +1,35 @@
+/**
+ * Gallery 排版：Inter + Noto Sans SC（GalleryFontLinks 从 Google Fonts 加载）
+ */
+
+/** Shell / 侧栏 / 主内容区根节点 */
+export const galleryShellClass =
+  'font-gallery text-neutral-900 antialiased [text-rendering:optimizeLegibility]'
+
+/** 文章正文容器（prose + 字体） */
+export const galleryProseClass =
+  'prose-gallery font-gallery text-[17px] font-normal leading-[1.8] tracking-[0.01em] text-neutral-900 antialiased'
+
+/** 正文内超链（与 gallery-prose.css 一致，供非 prose 区域复用） */
+export const galleryInlineLinkClass =
+  'font-semibold text-neutral-500 no-underline transition-colors hover:text-neutral-900'
+
+/** 文章卡片标题 */
+export const galleryCardTitleClass =
+  'font-gallery text-[15px] font-medium leading-[1.45] tracking-[0.01em] text-neutral-900 antialiased'
+
+/** 文章卡片标签行 */
+export const galleryCardTagClass =
+  'font-gallery text-[12px] font-normal leading-[1.5] tracking-[0.03em] text-neutral-500 antialiased'
+
+/** 文章详情页标题 */
+export const galleryPostTitleClass =
+  'font-gallery text-2xl font-semibold leading-tight tracking-[0.01em] text-neutral-900 antialiased md:text-[1.75rem]'
+
+/** 文章页标签链接 */
+export const galleryPostTagLinkClass = `${galleryInlineLinkClass} text-[12px]`
+
+/** 标签列表页（Parodies 风格纯文字链接） */
+export const galleryTagLinkClass =
+  'font-gallery block py-3.5 text-[17px] font-medium leading-[1.55] tracking-[0.01em] text-neutral-900 antialiased transition-colors duration-200 hover:text-neutral-500 sm:text-[18px] sm:py-4'
+

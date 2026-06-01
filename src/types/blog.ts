@@ -64,6 +64,8 @@ export type PartialPost = {
 export type Post = {
   id: string
   status: 'Published' | 'Draft' | 'Hidden'
+  /** Notion 数据库 checkbox「pinned」；置顶文章在列表/首页排在最前 */
+  pinned?: boolean
   title: string
   slug: string
   excerpt: string
@@ -128,6 +130,8 @@ export type SharedNavFooterStaticProps = {
     siteSubtitle: Title | null
     logo?: DatabaseObjectResponse['icon']
     enableNavSubtitle?: boolean
+    /** 远程 theme-config 解析后的主题 id */
+    activeTheme?: string
   }
   // revalidate: number
 }

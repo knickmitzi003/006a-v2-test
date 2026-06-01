@@ -4,6 +4,10 @@ import { ApiColor } from '@/src/types/notion'
 import { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints'
 import { randomUUID } from 'crypto'
 import { slugify } from '../../util'
+import {
+  readPinnedFromNotionProperties,
+  sortPostsByPinnedThenDate,
+} from '../pinnedPosts'
 import { getImageInfo } from '../getImageInfo'
 
 export const formatPosts = async (
@@ -15,7 +19,7 @@ export const formatPosts = async (
       return formattedPost
     })
   )
-  return formattedPosts
+  return sortPostsByPinnedThenDate(formattedPosts)
 }
 
 const formatPost = async (post: PageObjectResponse): Promise<Post> => {
@@ -117,13 +121,20 @@ const formatPost = async (post: PageObjectResponse): Promise<Post> => {
     originalCover:
       original_cover.type === 'checkbox' && original_cover.checkbox,
     repost: repost.type === 'url' && repost.url,
-    // 下载链接：用于后续主题(如 gallery)在卡片上直接提供下载入口；属性缺失时安全降级为空串
-    download: (download && download.type === 'url' && download.url) || '',
+    // 下载信息：Notion 为 rich_text（可含说明+链接）；兼容旧 url 类型
+    download:
+      (download?.type === 'rich_text' &&
+        download.rich_text?.map((t) => t.plain_text).join('')) ||
+      (download?.type === 'url' && download.url) ||
+      '',
   }
 
   const formattedPost = {
     id,
     status: postStatus ?? 'Draft',
+    pinned: readPinnedFromNotionProperties(
+      properties as Record<string, { type?: string; checkbox?: boolean }>
+    ),
     title: postTitle ?? 'Untitled',
     slug: postSlug ?? 'unknown',
     excerpt: postExcerpt ?? '',
@@ -162,9 +173,7 @@ export function getNavigationInfo(
   post: Post | undefined
 ) {
   if (!post) return { previousPost: null, nextPost: null }
-  const postIndex = formattedPosts.findIndex(
-    (p) => p.date.created === post.date.created
-  )
+  const postIndex = formattedPosts.findIndex((p) => p.slug === post.slug)
   const previousPost = postIndex > 0 ? formattedPosts[postIndex - 1] : null
   const nextPost =
     postIndex < formattedPosts.length - 1 ? formattedPosts[postIndex + 1] : null

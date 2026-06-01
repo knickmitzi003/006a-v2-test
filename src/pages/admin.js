@@ -1,6 +1,10 @@
 import React from 'react'
 import dynamic from 'next/dynamic'
-import Head from 'next/head' // 🟢 引入 Head
+import Head from 'next/head'
+import {
+  DEFAULT_FAVICON_16,
+  DEFAULT_FAVICON_32,
+} from '@/src/themes/gallery/GalleryFaviconLinks'
 
 // 引用路径保持你的 blog-manager
 const AdminComponent = dynamic(
@@ -38,7 +42,9 @@ const AdminPage = () => {
       {/* 🟢 在这里设置图标，绝对生效 */}
       <Head>
         <title>Blog Admin</title>
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" type="image/png" sizes="32x32" href={DEFAULT_FAVICON_32} />
+        <link rel="icon" type="image/png" sizes="16x16" href={DEFAULT_FAVICON_16} />
+        <link rel="shortcut icon" href={DEFAULT_FAVICON_32} />
       </Head>
       
       <ErrorBoundary>

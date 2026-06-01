@@ -4,7 +4,6 @@ import { BlockRender } from '../components/blocks/BlockRender'
 import { LargeTitle } from '../components/LargeTitle'
 import { BlogLayoutGradient } from '../components/layout/BlogLayout'
 import ContainerLayout from '../components/post/ContainerLayout'
-import CommentSection from '../components/section/CommentSection'
 import FriendsCollection from '../components/section/FriendsCollection'
 import withNavFooter from '../components/withNavFooter'
 import { formatBlocks } from '../lib/blog/format/block'
@@ -15,9 +14,11 @@ import { addSubTitle } from '../lib/util'
 import {
   Friend,
   NextPageWithLayout,
+  Page,
   SharedNavFooterStaticProps,
 } from '../types/blog'
 import { BlockResponse } from '../types/notion'
+import { GalleryFriendsPage } from '@/src/themes/gallery/GalleryFriendsPage'
 
 const { FREINDS } = CONFIG.DEFAULT_SPECIAL_PAGES
 
@@ -26,9 +27,24 @@ const Freinds: NextPage<{
   friendsDatabase: {
     type: 'Friends'
     data: Friend[]
-  }
+  } | null
   title: string
-}> = ({ blocks, friendsDatabase, title }) => {
+  page: Page | null
+  activeTheme?: string
+}> = ({ blocks, friendsDatabase, title, page, activeTheme }) => {
+  const friends = friendsDatabase?.data ?? []
+
+  if (activeTheme === 'gallery') {
+    return (
+      <GalleryFriendsPage
+        title={title}
+        pageNav={page?.nav}
+        blocks={blocks}
+        friends={friends}
+      />
+    )
+  }
+
   return (
     <>
       <ContainerLayout>
@@ -36,11 +52,7 @@ const Freinds: NextPage<{
         <div className="break-words">
           <BlockRender blocks={blocks} />
         </div>
-        <FriendsCollection friends={friendsDatabase.data} />
-        {/* <p className="mt-12 -mb-4 text-center text-neutral-400">
-          👇扣1立即交友(不是)👇
-        </p>
-        <CommentSection /> */}
+        <FriendsCollection friends={friends} />
       </ContainerLayout>
     </>
   )
@@ -54,7 +66,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     addSubTitle(sharedPageStaticProps.props, FREINDS)
     const page =
       sharedPageStaticProps.props.navPages.find(
-        (page) => page.slug === FREINDS
+        (p) => p.slug === FREINDS
       ) ?? null
     const blocks = await getAllBlocks(page?.id ?? '')
     const formattedBlocks = await formatBlocks(blocks)
@@ -68,9 +80,10 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     return {
       props: {
         ...sharedPageStaticProps.props,
-        title: page?.title,
-        blocks: formattedBlocks,
-        friendsDatabase: friendsDatabase,
+        page,
+        title: page?.nav || page?.title || '友链',
+        blocks: formattedBlocks || [],
+        friendsDatabase,
       },
       revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
     }
@@ -80,6 +93,9 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
 const withNavPage = withNavFooter(Freinds)
 
 ;(withNavPage as NextPageWithLayout).getLayout = (page) => {
+  if ((page.props as { activeTheme?: string })?.activeTheme === 'gallery') {
+    return page
+  }
   return <BlogLayoutGradient>{page}</BlogLayoutGradient>
 }
 

@@ -568,7 +568,7 @@ export const Callout = ({ block, children }: BlockComponentType) => {
   }) => (
     <div
       className={classNames(
-        'relative flex h-full flex-row items-start justify-between overflow-hidden rounded-2xl p-4 sm:rounded-[1.25rem] sm:p-5',
+        'gallery-callout relative flex h-full flex-row items-start justify-between overflow-hidden rounded-2xl border border-transparent p-4 sm:rounded-[1.25rem] sm:p-5',
         color !== 'default' ? getColor(color) : 'bg-gray-50 dark:bg-[#171717]'
       )}
     >

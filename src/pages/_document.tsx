@@ -4,14 +4,13 @@ export default function Document() {
   return (
     <Html lang="zh-CN">
       <Head>
-        {/* 注意：这里的 href="/favicon.ico" 会自动去找根目录 public 文件夹里的 favicon.ico */}
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="shortcut icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/favicon.ico" />
+        {/* 标签图标由 _app 按 activeTheme 切换；此处不再写死 favicon，避免覆盖 Gallery 主题图标 */}
       </Head>
       <body>
         <Main />
         <NextScript />
+        {/* 在 __NEXT_DATA__ 之后立刻根据 activeTheme 设置 Gallery 图标与 cookie */}
+        <script src="/gallery-theme-boot.js" />
       </body>
     </Html>
   )
