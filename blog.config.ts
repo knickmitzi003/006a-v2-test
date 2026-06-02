@@ -148,7 +148,7 @@ const CONFIG: BlogConfig = {
   },
   ENABLE_DRAFT_DIALOG: true,
   // Gallery 主题登录按钮链接（可自行修改）
-  GALLERY_LOGIN_URL: '#',
+  GALLERY_LOGIN_URL: 'https://store.proplus.onl/buy',
   GALLERY_GUIDE_PATH: '/about',
   GALLERY_MORE_PATH: '/friends',
 }
