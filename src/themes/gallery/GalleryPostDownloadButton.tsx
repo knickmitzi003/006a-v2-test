@@ -20,18 +20,18 @@ export function GalleryPostDownloadButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-md bg-black px-4 py-2 text-[14px] font-bold text-white transition-colors hover:bg-neutral-800 active:bg-neutral-900"
+        className="inline-flex items-center gap-2.5 rounded-md bg-black px-6 py-2.5 text-[15px] font-bold text-white transition-colors hover:bg-neutral-800 active:bg-neutral-900"
       >
+        下载
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/themes/gallery/download-cloud-icon.png"
           alt=""
-          width={18}
-          height={18}
-          className="h-[18px] w-[18px] shrink-0 brightness-0 invert"
+          width={20}
+          height={20}
+          className="h-5 w-5 shrink-0 brightness-0 invert"
           aria-hidden
         />
-        下载
       </button>
       <GalleryDownloadModal
         open={open}
