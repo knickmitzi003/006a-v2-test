@@ -1,0 +1,144 @@
+/**
+ * Chatwoot 全局客服气泡：圆形黑底 + 白色气泡图标 + 外发光
+ * 兼容 standard 与 expanded_bubble（后台 expanded 时由 CSS 压成圆形）
+ */
+
+/* —— expanded_bubble：覆盖 SDK 的胶囊宽高 —— */
+button.woot-widget-bubble.woot-widget--expanded,
+.woot-widget-bubble.woot-widget--expanded {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 56px !important;
+  height: 56px !important;
+  min-width: 56px !important;
+  max-width: 56px !important;
+  min-height: 56px !important;
+  max-height: 56px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: #0a0a0a !important;
+  box-shadow:
+    0 0 18px 5px rgba(255, 255, 255, 0.16),
+    0 0 36px 12px rgba(190, 210, 255, 0.1),
+    0 4px 14px rgba(0, 0, 0, 0.2) !important;
+  transition:
+    box-shadow 0.25s ease,
+    transform 0.2s ease !important;
+}
+
+button.woot-widget-bubble.woot-widget--expanded:hover,
+.woot-widget-bubble.woot-widget--expanded:hover {
+  background: #0a0a0a !important;
+  box-shadow:
+    0 0 26px 8px rgba(255, 255, 255, 0.22),
+    0 0 48px 18px rgba(190, 210, 255, 0.14),
+    0 6px 18px rgba(0, 0, 0, 0.25) !important;
+  transform: scale(1.05) !important;
+}
+
+/* 隐藏「在线客服」文字区域，保留 SVG 图标 */
+.woot-widget-bubble.woot-widget--expanded div,
+#woot-widget--expanded__text {
+  display: none !important;
+  width: 0 !important;
+  max-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.woot-widget-bubble:not(.woot--close) svg,
+button.woot-widget-bubble:not(.woot--close) svg {
+  display: block !important;
+  width: 22px !important;
+  height: 22px !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+  position: relative !important;
+}
+
+.woot-widget-bubble.woot-widget--expanded svg path,
+.woot-widget-bubble svg path {
+  fill: #ffffff !important;
+}
+
+/* —— standard 圆形气泡 —— */
+button.woot-widget-bubble:not(.woot-widget--expanded),
+.woot-widget-bubble:not(.woot-widget--expanded) {
+  width: 56px !important;
+  height: 56px !important;
+  min-width: 56px !important;
+  max-width: 56px !important;
+  min-height: 56px !important;
+  max-height: 56px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: #0a0a0a !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow:
+    0 0 18px 5px rgba(255, 255, 255, 0.16),
+    0 0 36px 12px rgba(190, 210, 255, 0.1),
+    0 4px 14px rgba(0, 0, 0, 0.2) !important;
+}
+
+button.woot-widget-bubble:not(.woot-widget--expanded):hover,
+.woot-widget-bubble:not(.woot-widget--expanded):hover {
+  background: #0a0a0a !important;
+  transform: scale(1.05) !important;
+}
+
+/* 打开面板时隐藏 logo，仅显示居中 × */
+.woot-widget-bubble.woot--close svg,
+button.woot-widget-bubble.woot--close svg {
+  display: none !important;
+}
+
+.woot-widget-bubble.woot--close::before,
+.woot-widget-bubble.woot--close::after,
+button.woot-widget-bubble.woot--close::before,
+button.woot-widget-bubble.woot--close::after {
+  left: 50% !important;
+  top: 50% !important;
+  height: 18px !important;
+  width: 2px !important;
+  margin: 0 !important;
+  background-color: #ffffff !important;
+}
+
+.woot-widget-bubble.woot--close::before,
+button.woot-widget-bubble.woot--close::before {
+  transform: translate(-50%, -50%) rotate(45deg) !important;
+}
+
+.woot-widget-bubble.woot--close::after,
+button.woot-widget-bubble.woot--close::after {
+  transform: translate(-50%, -50%) rotate(-45deg) !important;
+}
+
+/* 外层 holder 勿再撑成胶囊宽度 */
+.woot--bubble-holder,
+.woot--bubble-holder.woot--expanded {
+  width: 56px !important;
+  height: 56px !important;
+  max-width: 56px !important;
+}
+
+/* 暗色主题页面加强光晕 */
+html.dark .woot-widget-bubble.woot-widget--expanded,
+html.dark button.woot-widget-bubble.woot-widget--expanded,
+html.dark .woot-widget-bubble:not(.woot-widget--expanded) {
+  box-shadow:
+    0 0 22px 8px rgba(255, 255, 255, 0.2),
+    0 0 44px 16px rgba(200, 215, 255, 0.12),
+    0 4px 14px rgba(0, 0, 0, 0.3) !important;
+}
+
+.woot-widget-bubble .woot--notification {
+  top: 2px !important;
+  right: 2px !important;
+}

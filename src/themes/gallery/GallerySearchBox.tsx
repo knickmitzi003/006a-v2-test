@@ -106,7 +106,7 @@ export function GallerySearchBox() {
           onChange={(e) => setValue(e.target.value)}
           placeholder="输入关键词"
           autoComplete="off"
-          className="font-gallery w-full rounded-full border border-neutral-200 bg-neutral-50 py-2 pl-9 pr-8 text-[13px] text-neutral-900 outline-none transition-colors placeholder:text-neutral-400 focus:border-neutral-400 focus:bg-white"
+          className="font-gallery w-full rounded-full border border-neutral-200 bg-neutral-50 py-1.5 pl-8 pr-7 text-[12px] text-neutral-900 outline-none transition-colors placeholder:text-neutral-400 focus:border-neutral-400 focus:bg-white"
         />
         {value ? (
           <button

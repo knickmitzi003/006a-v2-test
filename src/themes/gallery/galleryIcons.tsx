@@ -1,13 +1,39 @@
 /**
- * 侧栏导航图标：在此文件修改 SVG，或在 GalleryNavIcons 中改为 <img src="..." />。
+ * 侧栏导航图标：PNG 见 public/themes/gallery/nav/，路径常量见 galleryConstants.ts。
  * 各菜单项使用哪个 icon 键，见 galleryNav.ts 里 item.icon。
  */
 import { ReactElement, SVGProps } from 'react'
+import {
+  GALLERY_NAV_ICON_GUIDE,
+  GALLERY_NAV_ICON_HOME,
+  GALLERY_NAV_ICON_LISTS,
+  GALLERY_NAV_ICON_MODELS,
+  GALLERY_NAV_ICON_PARODIES,
+} from './galleryConstants'
 import { GalleryNavItem } from './galleryNav'
 
+/** 侧栏导航图标尺寸（与 GallerySidebar 文案略缩小配套） */
+export const GALLERY_NAV_ICON_SIZE = 16
+
+const navImgClass = 'h-4 w-4 shrink-0 object-contain'
+
+function NavIconImg({ src, alt = '' }: { src: string; alt?: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt}
+      width={GALLERY_NAV_ICON_SIZE}
+      height={GALLERY_NAV_ICON_SIZE}
+      className={navImgClass}
+      aria-hidden
+    />
+  )
+}
+
 const iconProps: SVGProps<SVGSVGElement> = {
-  width: 20,
-  height: 20,
+  width: GALLERY_NAV_ICON_SIZE,
+  height: GALLERY_NAV_ICON_SIZE,
   viewBox: '0 0 24 24',
   fill: 'none',
   stroke: 'currentColor',
@@ -20,19 +46,8 @@ const iconProps: SVGProps<SVGSVGElement> = {
 
 /** Gallery Epic 黑色线性图标 */
 export const GalleryNavIcons: Record<GalleryNavItem['icon'], () => ReactElement> = {
-  home: () => (
-    <svg {...iconProps}>
-      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
-    </svg>
-  ),
-  lists: () => (
-    <svg {...iconProps}>
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <circle cx="8.5" cy="8.5" r="1.5" />
-      <path d="m21 15-5-5L5 21" />
-    </svg>
-  ),
+  home: () => <NavIconImg src={GALLERY_NAV_ICON_HOME} />,
+  lists: () => <NavIconImg src={GALLERY_NAV_ICON_LISTS} />,
   cosers: () => (
     <svg {...iconProps}>
       <circle cx="12" cy="12" r="10" />
@@ -41,21 +56,9 @@ export const GalleryNavIcons: Record<GalleryNavItem['icon'], () => ReactElement>
       <line x1="15" y1="9" x2="15.01" y2="9" />
     </svg>
   ),
-  parodies: () => (
-    <svg {...iconProps}>
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  ),
-  models: () => (
-    <svg {...iconProps}>
-      <circle cx="12" cy="12" r="10" />
-      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-      <path d="M9 9h.01" />
-      <path d="M15 9h.01" />
-      <path d="M12 6v1" />
-    </svg>
-  ),
+  parodies: () => <NavIconImg src={GALLERY_NAV_ICON_PARODIES} />,
+  guide: () => <NavIconImg src={GALLERY_NAV_ICON_GUIDE} />,
+  models: () => <NavIconImg src={GALLERY_NAV_ICON_MODELS} />,
 }
 
 export function getGalleryNavIcon(icon: GalleryNavItem['icon']) {

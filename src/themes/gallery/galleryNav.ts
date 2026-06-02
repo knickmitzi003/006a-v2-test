@@ -4,7 +4,7 @@ export type GalleryNavItem = {
   /** Epic 展示文案（与参考站一致） */
   label: string
   href: string
-  icon: 'home' | 'lists' | 'cosers' | 'parodies' | 'models'
+  icon: 'home' | 'lists' | 'cosers' | 'parodies' | 'guide' | 'models'
 }
 
 export type GalleryNavSection = {
@@ -42,7 +42,7 @@ export const GALLERY_NAV_SECTIONS: GalleryNavSection[] = [
   {
     title: 'Album',
     items: [
-      { label: '使用说明', href: guidePath, icon: 'lists' },
+      { label: '使用说明', href: guidePath, icon: 'guide' },
       { label: 'Models', href: morePath, icon: 'models' },
     ],
   },

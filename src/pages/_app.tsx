@@ -54,8 +54,9 @@ function BlogApp({ Component, pageProps, router }: AppPropsWithLayout) {
 
             window.chatwootSettings = {
               position: 'right',
-              type: 'expanded_bubble',
-              launcherTitle: '在线客服',
+              type: 'standard',
+              launcherTitle: '',
+              darkMode: 'light',
               // 监听消息：实现丝滑提醒逻辑
               onMessage: function(message) {
                 if (message.message_type === 1) {
@@ -92,11 +93,49 @@ function BlogApp({ Component, pageProps, router }: AppPropsWithLayout) {
               }
             };
 
+            function patchChatwootLauncher() {
+              var textEl = d.getElementById('woot-widget--expanded__text');
+              if (textEl) textEl.textContent = '';
+              var bubble = d.querySelector('.woot-widget-bubble');
+              if (bubble) {
+                bubble.setAttribute('aria-label', '在线客服');
+                bubble.setAttribute('title', '在线客服');
+              }
+            }
+            function watchChatwootLauncherText() {
+              var textEl = d.getElementById('woot-widget--expanded__text');
+              if (!textEl || textEl.__cwPatched) return;
+              textEl.__cwPatched = true;
+              patchChatwootLauncher();
+              new MutationObserver(patchChatwootLauncher).observe(textEl, {
+                characterData: true,
+                childList: true,
+                subtree: true
+              });
+            }
+            function forceChatwootLightPanel() {
+              if (window.$chatwoot && window.$chatwoot.setColorScheme) {
+                window.$chatwoot.setColorScheme('light');
+              }
+            }
+            window.addEventListener('chatwoot:ready', function() {
+              patchChatwootLauncher();
+              watchChatwootLauncherText();
+              forceChatwootLightPanel();
+            });
+
             g.onload = function() {
               window.chatwootSDK.run({
                 websiteToken: 'SGwpXTTn9T7jhVsvudTEy1tV',
                 baseUrl: BASE_URL
-              })
+              });
+              [400, 1200, 2500, 5000].forEach(function(ms) {
+                setTimeout(function() {
+                  patchChatwootLauncher();
+                  watchChatwootLauncherText();
+                  forceChatwootLightPanel();
+                }, ms);
+              });
             }
           })(document,"script");
         `}
