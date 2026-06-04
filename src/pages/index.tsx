@@ -3,7 +3,7 @@ import withNavFooter from '../components/withNavFooter'
 import { formatPosts } from '../lib/blog/format/post'
 import { loadHomeWidgets } from '../lib/blog/loadHomeWidgets'
 import { withNavFooterStaticProps } from '../lib/blog/withNavFooterStaticProps'
-import { capHomePosts } from '../lib/blog/postLimits'
+import { buildHomeFeedPosts } from '../lib/blog/postLimits'
 import { ANNOUNCEMENT_SLUG } from '../lib/blog/pinnedPosts'
 import { getAnnouncementPost } from '../lib/blog/loadHomeWidgets'
 import { getPosts } from '../lib/notion/getBlogData'
@@ -37,7 +37,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
   ) => {
     try {
       const postsRaw = await getPosts(ApiScope.Archive)
-      let allFormattedPosts = capHomePosts(await formatPosts(postsRaw))
+      let allFormattedPosts = buildHomeFeedPosts(await formatPosts(postsRaw))
 
       if (!allFormattedPosts || allFormattedPosts.length === 0) {
         const backupPosts = (sharedPageStaticProps.props.navPages as unknown as { type?: string; slug?: string }[]) || []

@@ -36,10 +36,13 @@ export function withNavFooterStaticProps(
 
     const result = await getStaticPropsFunc(context, { props: sharedProps })
     if (result && 'props' in result && result.props) {
-      // 始终以 Notion 为准；页面内 catch 不得把主题写成 anzifan
-      result.props.activeTheme = await resolveActiveTheme(
-        result.props.activeTheme ?? sharedProps.activeTheme
-      )
+      // 复用 sharedProps.activeTheme（getRemoteTheme 已进程内缓存）；仅在页面显式覆盖时再解析
+      const pageTheme = result.props.activeTheme as string | undefined
+      if (pageTheme && pageTheme !== sharedProps.activeTheme) {
+        result.props.activeTheme = await resolveActiveTheme(pageTheme)
+      } else {
+        result.props.activeTheme = sharedProps.activeTheme
+      }
     }
     return result
   }

@@ -4,7 +4,8 @@ export type ThemeId = 'anzifan' | 'touchgal' | 'gallery'
 
 /**
  * 各主题首页组件共用 props。
- * posts 已在 index SSG 中限制为最多 BLOG_HOME_POSTS_MAX（默认 80）篇（announcement、置顶优先；与后台主题无关），
+ * posts 由 index 经 buildHomeFeedPosts 下发（默认全量；announcement、置顶优先排序），
+ * 构建预渲染篇数见 STATIC_POST_PATHS_MAX（默认 80，与主题无关），
  * 且已按 Notion「pinned」置顶优先、再按日期降序（sortPostsByPinnedThenDate）。
  */
 export type ThemeHomeProps = {

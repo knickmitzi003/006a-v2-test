@@ -3,17 +3,16 @@ import { Post } from '@/src/types/blog'
 import { ANNOUNCEMENT_SLUG, sortPostsByPinnedThenDate } from './pinnedPosts'
 
 /**
- * 构建期文章数量上限（防 Vercel 部署超时）。全主题共用，与 Notion theme-config 无关。
- * - 首页：index → capHomePosts（anzifan / touchgal / gallery 等均消费 props.posts）
- * - 预渲染路径：post、tag、category、archive 的 getStaticPaths → capPostsForBuild
- * 超出路径走 fallback: 'blocking'。优先保留 announcement + 置顶，再按日期取满 N 篇。
+ * 构建期与首页文章策略（全主题共用，与 Notion theme-config 无关）：
+ * - 首页 feed：buildHomeFeedPosts → 默认全量，供卡片翻页（announcement + 置顶优先排序）
+ * - 预渲染路径：capPostsForBuild → STATIC_POST_PATHS_MAX（默认 80），其余 fallback: 'blocking'
  */
-export const BLOG_HOME_POSTS_MAX =
-  (CONFIG as { HOME_BUILD_POSTS_MAX?: number }).HOME_BUILD_POSTS_MAX ?? 80
-
-/** 预渲染文章及相关列表页路径所依据的文章上限 */
 export const BLOG_STATIC_POST_PATHS_MAX =
   (CONFIG as { STATIC_POST_PATHS_MAX?: number }).STATIC_POST_PATHS_MAX ?? 80
+
+/** 0 表示首页不限制篇数 */
+export const BLOG_HOME_FEED_POSTS_MAX =
+  (CONFIG as { HOME_FEED_POSTS_MAX?: number }).HOME_FEED_POSTS_MAX ?? 0
 
 type PostCapFields = Pick<Post, 'slug' | 'pinned' | 'date'>
 
@@ -30,12 +29,21 @@ function sliceToMax<T>(posts: T[], max: number): T[] {
   return posts.slice(0, max)
 }
 
-/** 首页下发文章列表（全主题共用） */
-export function capHomePosts(posts: Post[]): Post[] {
-  return sliceToMax(orderPostsForBuildCap(posts), BLOG_HOME_POSTS_MAX)
+/** 首页下发的文章列表：默认全量；HOME_FEED_POSTS_MAX>0 时才截断 */
+export function buildHomeFeedPosts(posts: Post[]): Post[] {
+  const ordered = orderPostsForBuildCap(posts)
+  if (!BLOG_HOME_FEED_POSTS_MAX || BLOG_HOME_FEED_POSTS_MAX <= 0) {
+    return ordered
+  }
+  return sliceToMax(ordered, BLOG_HOME_FEED_POSTS_MAX)
 }
 
-/** 构建 paths 时预渲染的文章集合（全主题共用） */
+/** 构建 paths 时预渲染的文章集合 */
 export function capPostsForBuild(posts: Post[]): Post[] {
   return sliceToMax(orderPostsForBuildCap(posts), BLOG_STATIC_POST_PATHS_MAX)
+}
+
+/** @deprecated 使用 buildHomeFeedPosts */
+export function capHomePosts(posts: Post[]): Post[] {
+  return buildHomeFeedPosts(posts)
 }

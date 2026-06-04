@@ -12,6 +12,7 @@ export function themeFromEnv(): ThemeId | null {
 
 /**
  * 解析当前应使用的主题。
+ * getRemoteTheme 在同一次构建内只请求 Notion 一次（见 getBlogData 缓存）。
  * @param fallback 上游已解析的主题（如 withNavFooter 共享 props），Notion 失败时保留
  */
 export async function resolveActiveTheme(

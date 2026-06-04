@@ -15,9 +15,12 @@ interface BlogConfig {
   }
   // 归档页每页显示的数量
   ARCHIVE_PER_COUNT: number
-  /** 首页 SSG 最多下发的文章数（全主题共用；announcement + 置顶优先） */
-  HOME_BUILD_POSTS_MAX?: number
-  /** 构建时预生成的文章/标签/归档等所依据的文章数（全主题共用） */
+  /**
+   * 首页卡片列表上限（全主题）。0 或不设 = 不限制，可翻页看全部文章；
+   * 仅影响首页 props，不减少构建预渲染篇数。
+   */
+  HOME_FEED_POSTS_MAX?: number
+  /** 构建时预渲染的文章路径数（announcement + 置顶优先；其余走 fallback） */
   STATIC_POST_PATHS_MAX?: number
   // public 下图标目录
   ICON_PATH: string
@@ -104,7 +107,7 @@ const CONFIG: BlogConfig = {
     MORE: 6,
   },
   ARCHIVE_PER_COUNT: 10,
-  HOME_BUILD_POSTS_MAX: 80,
+  HOME_FEED_POSTS_MAX: 0,
   STATIC_POST_PATHS_MAX: 80,
   ICON_PATH: '/icons',
   DEFAULT_SPECIAL_PAGES: {
