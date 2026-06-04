@@ -15,6 +15,7 @@ import {
 import { formatPosts } from '@/src/lib/blog/format/post'
 import { getAllTags, initialTag } from '@/src/lib/blog/format/tag'
 import { withNavFooterStaticProps } from '@/src/lib/blog/withNavFooterStaticProps'
+import { capPostsForBuild } from '@/src/lib/blog/postLimits'
 import { getPostsAndPieces } from '@/src/lib/notion/getBlogData'
 import { addSubTitle, createTagCategoryMap } from '@/src/lib/util'
 import {
@@ -35,8 +36,10 @@ const PER_COUNT = CONFIG.ARCHIVE_PER_COUNT
 
 export const getStaticPaths = async () => {
   const { posts, pieces } = await getPostsAndPieces(ApiScope.Archive)
+  const formattedPosts = await formatPosts(posts)
+  const cappedPosts = capPostsForBuild(formattedPosts)
   const perCount = CONFIG.ARCHIVE_PER_COUNT
-  const contentCount = [...posts, ...pieces].length
+  const contentCount = cappedPosts.length + pieces.length
   const pageCount = Math.ceil(contentCount / perCount)
   const paths = Array.from({ length: pageCount }, (_, i) => ({
     params: { page: (i + 1).toString() },

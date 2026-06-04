@@ -3,9 +3,10 @@ import withNavFooter from '../components/withNavFooter'
 import { formatPosts } from '../lib/blog/format/post'
 import { loadHomeWidgets } from '../lib/blog/loadHomeWidgets'
 import { withNavFooterStaticProps } from '../lib/blog/withNavFooterStaticProps'
-import { capHomePosts, BLOG_HOME_POSTS_MAX } from '../lib/blog/postLimits'
+import { capHomePosts } from '../lib/blog/postLimits'
 import { ANNOUNCEMENT_SLUG } from '../lib/blog/pinnedPosts'
-import { getLimitPosts } from '../lib/notion/getDatabase'
+import { getAnnouncementPost } from '../lib/blog/loadHomeWidgets'
+import { getPosts } from '../lib/notion/getBlogData'
 import { Post, SharedNavFooterStaticProps } from '../types/blog'
 import { ApiScope } from '../types/notion'
 import { themeFromEnv } from '../themes/getActiveTheme'
@@ -35,7 +36,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     sharedPageStaticProps: SharedNavFooterStaticProps
   ) => {
     try {
-      const postsRaw = await getLimitPosts(BLOG_HOME_POSTS_MAX, ApiScope.Archive)
+      const postsRaw = await getPosts(ApiScope.Archive)
       let allFormattedPosts = capHomePosts(await formatPosts(postsRaw))
 
       if (!allFormattedPosts || allFormattedPosts.length === 0) {
@@ -43,8 +44,11 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
         allFormattedPosts = backupPosts.filter((p) => p.type === 'Post') as Post[]
       }
 
-      const announcementPost =
+      let announcementPost =
         allFormattedPosts.find((p) => p.slug === ANNOUNCEMENT_SLUG) || null
+      if (!announcementPost) {
+        announcementPost = await getAnnouncementPost()
+      }
       const filteredPosts = allFormattedPosts.filter(
         (p) => p.slug !== ANNOUNCEMENT_SLUG
       )

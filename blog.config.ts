@@ -15,9 +15,9 @@ interface BlogConfig {
   }
   // 归档页每页显示的数量
   ARCHIVE_PER_COUNT: number
-  /** 首页 SSG 最多格式化/下发的文章数（防 Vercel 超时，全主题共用） */
+  /** 首页 SSG 最多下发的文章数（全主题共用；announcement + 置顶优先） */
   HOME_BUILD_POSTS_MAX?: number
-  /** 构建时预生成的文章详情路径数 */
+  /** 构建时预生成的文章/标签/归档等所依据的文章数（全主题共用） */
   STATIC_POST_PATHS_MAX?: number
   // public 下图标目录
   ICON_PATH: string

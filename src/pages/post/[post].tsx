@@ -15,7 +15,7 @@ import { formatBlocks } from '../../lib/blog/format/block'
 import { formatPosts, getNavigationInfo } from '../../lib/blog/format/post'
 import { withNavFooterStaticProps } from '../../lib/blog/withNavFooterStaticProps'
 import { getAllBlocks } from '../../lib/notion/getBlocks'
-import { BLOG_STATIC_POST_PATHS_MAX } from '../../lib/blog/postLimits'
+import { capPostsForBuild } from '../../lib/blog/postLimits'
 import { getPosts } from '../../lib/notion/getBlogData'
 import { addSubTitle } from '../../lib/util'
 import { NextPageWithLayout, PartialPost, Post, SharedNavFooterStaticProps } from '../../types/blog'
@@ -26,9 +26,7 @@ export const getStaticPaths = async () => {
   const formattedPosts = await formatPosts(postsRaw)
   
   // 构建期仅预渲染最新 N 篇，其余走 fallback: blocking（见 blog.config STATIC_POST_PATHS_MAX）
-  const paths = formattedPosts
-    .slice(0, BLOG_STATIC_POST_PATHS_MAX)
-    .map((post) => ({
+  const paths = capPostsForBuild(formattedPosts).map((post) => ({
       params: { post: post.slug },
     }))
 
