@@ -132,6 +132,12 @@ export type SharedNavFooterStaticProps = {
     enableNavSubtitle?: boolean
     /** 远程 theme-config 解析后的主题 id */
     activeTheme?: string
+    /** Gallery 主题全局底部广告条 */
+    galleryAdBanner?: {
+      url: string
+      imageSrc: string
+      promoText: string | null
+    } | null
   }
   // revalidate: number
 }

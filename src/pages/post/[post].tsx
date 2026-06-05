@@ -15,11 +15,6 @@ import {
   buildGalleryRecommendations,
   GalleryRecommendPost,
 } from '@/src/lib/gallery/galleryRecommendations'
-import {
-  GalleryAdBanner,
-  loadGalleryAdBanner,
-} from '@/src/lib/gallery/loadGalleryAdBanner'
-import { resolveActiveTheme } from '@/src/themes/getActiveTheme'
 import { formatBlocks } from '../../lib/blog/format/block'
 import { formatPosts, getNavigationInfo } from '../../lib/blog/format/post'
 import { withNavFooterStaticProps } from '../../lib/blog/withNavFooterStaticProps'
@@ -69,10 +64,6 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
       const blocks = await getAllBlocks(post.id)
       const formattedBlocks = await formatBlocks(blocks)
 
-      const activeTheme = await resolveActiveTheme()
-      const galleryAdBanner =
-        activeTheme === 'gallery' ? await loadGalleryAdBanner() : null
-
       // 🛡️ JSON 暴力清洗：杜绝 undefined 导致的 500 报错
       const safeData = JSON.parse(JSON.stringify({
         ...sharedPageStaticProps.props,
@@ -83,7 +74,6 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
             nextPost: nextPost || null,
         },
         recommendations,
-        galleryAdBanner,
       }))
 
       if (safeData.widgets?.profile && safeData.widgets.profile.links === undefined) {
@@ -105,9 +95,8 @@ const PostPage: NextPage<{
   blocks: BlockResponse[]
   navigation: { previousPost: PartialPost; nextPost: PartialPost }
   recommendations?: GalleryRecommendPost[]
-  galleryAdBanner?: GalleryAdBanner | null
   activeTheme?: string
-}> = ({ post, blocks, navigation, recommendations = [], galleryAdBanner = null, activeTheme }) => {
+}> = ({ post, blocks, navigation, recommendations = [], activeTheme }) => {
   if (!post) return <Section404 />
 
   if (activeTheme === 'gallery') {
@@ -116,7 +105,6 @@ const PostPage: NextPage<{
         post={post}
         blocks={blocks}
         recommendations={recommendations}
-        galleryAdBanner={galleryAdBanner}
       />
     )
   }

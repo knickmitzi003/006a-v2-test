@@ -1301,7 +1301,7 @@ const [mounted, setMounted] = useState(false);
           <div style={{background: '#424242', padding: 30, borderRadius: 20}}>
             <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'22px'}}>
               <div style={{fontSize:'20px', fontWeight:'bold', color:'#fff'}}>📢 广告位编辑</div>
-              <div style={{fontSize:'12px', color:'#888'}}>仅 Gallery 主题内页底部显示</div>
+              <div style={{fontSize:'12px', color:'#888'}}>Gallery 主题全站底部细条显示</div>
             </div>
 
             {galleryAdLoading ? (
@@ -1309,12 +1309,12 @@ const [mounted, setMounted] = useState(false);
             ) : (
               <>
                 <div style={{fontSize:'12px', color:'#aaa', marginBottom:'20px', lineHeight:1.8}}>
-                  填写目标链接后，构建时会自动抓取该站的 Hero / OG 图作为横幅背景（类似 Telegram 链接预览）。宣传文字选填；不填则只显示背景图。未配置链接时底部不留空白。
+                  横幅显示在 Gallery 所有页面主内容区最底部（细条，参考 Gallery Epic）。链接必填；未配置时全站不留空白。背景图优先使用下方上传的 Banner（写入 Notion cover 字段），未上传则构建时自动抓取链接预览图。
                 </div>
                 <div style={{display:'flex', gap:'24px', alignItems:'flex-start', flexWrap:'wrap'}}>
                   <div>
-                    <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'8px'}}>自定义封面（选填，覆盖自动抓取）</label>
-                    <label className="img-drop" style={{width:'200px', height:'80px', minHeight:'80px', padding:0, borderRadius:'10px', overflow:'hidden'}}
+                    <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'8px'}}>Banner 背景图 <span style={{color:'#777', fontWeight:'normal'}}>(选填，写入 cover)</span></label>
+                    <label className="img-drop" style={{width:'280px', height:'56px', minHeight:'56px', padding:0, borderRadius:'8px', overflow:'hidden', border:'1px dashed #555'}}
                       onDragOver={e=>{e.preventDefault(); e.stopPropagation();}}
                       onDrop={e=>{e.preventDefault(); e.stopPropagation(); uploadGalleryAdCover(e.dataTransfer.files[0]);}}>
                       <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{ uploadGalleryAdCover(e.target.files[0]); e.target.value=''; }} />
@@ -1322,8 +1322,11 @@ const [mounted, setMounted] = useState(false);
                         ? <div className="img-uploading"><div className="img-spin"></div></div>
                         : galleryAd.cover
                           ? <img src={galleryAd.cover} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="" />
-                          : <div style={{pointerEvents:'none', fontSize:'11px', textAlign:'center', color:'#999', padding:'10px'}}>拖拽 / 点击上传<br/>横版封面</div>}
+                          : <div style={{pointerEvents:'none', fontSize:'11px', textAlign:'center', color:'#999', padding:'10px'}}>拖拽 / 点击上传横版 Banner<br/><span style={{color:'#666'}}>建议宽图，前台高度约 40px</span></div>}
                     </label>
+                    {galleryAd.cover ? (
+                      <button type="button" onClick={()=>setGalleryAd(prev=>({...prev, cover:''}))} style={{marginTop:'8px', fontSize:'11px', color:'#ff7875', background:'none', border:'none', cursor:'pointer', padding:0}}>移除 Banner 图</button>
+                    ) : null}
                   </div>
                   <div style={{flex:1, minWidth:'280px', display:'flex', flexDirection:'column', gap:'16px'}}>
                     <div>
@@ -1345,7 +1348,7 @@ const [mounted, setMounted] = useState(false);
                   ) : null}
                 </div>
                 <div style={{marginTop:'20px', fontSize:'12px', color:'#777', lineHeight:1.7}}>
-                  💡 保存后需点击右上角「更新」重新部署，前台 Gallery 内页才会显示新横幅。
+                  💡 保存后需点击右上角「更新」重新部署，前台 Gallery 全站底部才会显示新横幅。
                 </div>
               </>
             )}

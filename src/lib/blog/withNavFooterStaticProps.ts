@@ -1,5 +1,6 @@
 import { SharedNavFooterStaticProps } from '@/src/types/blog'
 import { GetStaticPropsContext } from 'next'
+import { loadGalleryAdBanner } from '@/src/lib/gallery/loadGalleryAdBanner'
 import { resolveActiveTheme } from '@/src/themes/getActiveTheme'
 import { getCachedNavFooter } from '../notion/getCachedMem'
 
@@ -9,12 +10,16 @@ async function buildSharedProps(
   logo: SharedNavFooterStaticProps['props']['logo']
 ): Promise<SharedNavFooterStaticProps['props']> {
   const activeTheme = await resolveActiveTheme()
+  const galleryAdBanner =
+    activeTheme === 'gallery' ? await loadGalleryAdBanner() : null
+
   return {
     navPages,
     siteTitle,
     siteSubtitle: null,
     logo,
     activeTheme,
+    galleryAdBanner,
   }
 }
 
@@ -42,6 +47,9 @@ export function withNavFooterStaticProps(
         result.props.activeTheme = await resolveActiveTheme(pageTheme)
       } else {
         result.props.activeTheme = sharedProps.activeTheme
+      }
+      if (result.props.galleryAdBanner === undefined) {
+        result.props.galleryAdBanner = sharedProps.galleryAdBanner ?? null
       }
     }
     return result

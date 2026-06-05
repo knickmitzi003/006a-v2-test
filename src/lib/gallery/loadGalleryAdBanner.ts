@@ -1,6 +1,4 @@
-import CONFIG from '@/blog.config'
 import { fetchUrlPreview } from '@/src/lib/blog/fetchUrlPreview'
-import { formatPosts } from '@/src/lib/blog/format/post'
 import { getWidgets } from '@/src/lib/notion/getBlogData'
 import { readRichTextPlain } from '@/src/lib/notion/readProperty'
 
@@ -12,26 +10,37 @@ export type GalleryAdBanner = {
 
 const GALLERY_AD_SLUG = 'gallery-ad'
 
-function isUsableCover(src: string | undefined | null): src is string {
-  if (!src || !src.startsWith('http')) return false
-  if (src === CONFIG.DEFAULT_POST_COVER) return false
-  return true
+let buildCache: GalleryAdBanner | null | undefined
+
+function readCoverUrl(
+  cover: { type: string; url?: string | null } | undefined
+): string | null {
+  if (!cover || cover.type !== 'url') return null
+  const src = cover.url?.trim()
+  return src?.startsWith('http') ? src : null
 }
 
 export async function loadGalleryAdBanner(): Promise<GalleryAdBanner | null> {
+  if (buildCache !== undefined) return buildCache
+
   const widgets = await getWidgets()
   const raw = widgets.find(
     (w) => readRichTextPlain(w.properties.slug) === GALLERY_AD_SLUG
   )
-  if (!raw) return null
+  if (!raw) {
+    buildCache = null
+    return null
+  }
 
-  const [widget] = await formatPosts([raw])
-  const url = (widget.excerpt || '').trim()
-  if (!url.startsWith('http')) return null
+  const url = readRichTextPlain(raw.properties.excerpt) || ''
+  if (!url.startsWith('http')) {
+    buildCache = null
+    return null
+  }
 
-  const coverOverride = isUsableCover(widget.cover?.light?.src)
-    ? widget.cover.light.src
-    : null
+  const coverOverride = readCoverUrl(
+    raw.properties.cover as { type: string; url?: string | null }
+  )
 
   let imageSrc = coverOverride
   if (!imageSrc) {
@@ -39,15 +48,19 @@ export async function loadGalleryAdBanner(): Promise<GalleryAdBanner | null> {
     imageSrc = preview.image?.startsWith('http') ? preview.image : null
   }
 
-  if (!imageSrc) return null
+  if (!imageSrc) {
+    buildCache = null
+    return null
+  }
 
-  const rawTitle = (widget.title || '').trim()
+  const rawTitle = readRichTextPlain(raw.properties.title) || ''
   const promoText =
     rawTitle && rawTitle !== '广告位' ? rawTitle : null
 
-  return {
+  buildCache = {
     url,
     imageSrc,
     promoText,
   }
+  return buildCache
 }

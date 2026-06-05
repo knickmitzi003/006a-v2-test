@@ -4,32 +4,34 @@ type GalleryAdBannerProps = {
   banner: GalleryAdBannerData
 }
 
+/** Gallery Epic 风格：主内容区底部细条横幅 */
 export function GalleryAdBanner({ banner }: GalleryAdBannerProps) {
   const { url, imageSrc, promoText } = banner
 
   return (
-    <section className="mt-10">
+    <aside className="shrink-0 border-t border-neutral-200 bg-white">
       <a
         href={url}
         target="_blank"
         rel="noopener noreferrer sponsored"
-        className="group relative block w-full overflow-hidden rounded-xl bg-neutral-900"
-        style={{ aspectRatio: '4 / 1' }}
+        className="group relative flex h-10 w-full items-center overflow-hidden"
       >
         <img
           src={imageSrc}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+          className="absolute inset-0 h-full w-full object-cover"
           loading="lazy"
         />
         {promoText ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/35 px-6 transition-colors group-hover:bg-black/45">
-            <p className="max-w-[90%] text-center font-gallery text-base font-semibold tracking-wide text-white drop-shadow-md sm:text-lg md:text-xl">
+          <div className="relative z-10 flex h-full w-full items-center bg-black/45 px-4 transition-colors group-hover:bg-black/55 sm:px-6">
+            <p className="truncate font-gallery text-[11px] font-medium tracking-wide text-white">
               {promoText}
             </p>
           </div>
-        ) : null}
+        ) : (
+          <span className="sr-only">广告</span>
+        )}
       </a>
-    </section>
+    </aside>
   )
 }

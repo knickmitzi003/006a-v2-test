@@ -1,3 +1,4 @@
+import { GalleryAdBanner } from '@/src/lib/gallery/loadGalleryAdBanner'
 import { GalleryPageLayout } from '@/src/themes/gallery/GalleryPageLayout'
 import { GalleryShell } from '@/src/themes/gallery/GalleryShell'
 import { Page, SharedNavFooterStaticProps } from '@/src/types/blog'
@@ -9,11 +10,19 @@ export default function withNavFooter(
   pureFooter?: boolean,
   showBeian?: boolean
 ) {
-  return function WithNavFooterWrapper(props: SharedNavFooterStaticProps['props'] & { activeTheme?: string }) {
+  return function WithNavFooterWrapper(
+    props: SharedNavFooterStaticProps['props'] & {
+      activeTheme?: string
+      galleryAdBanner?: GalleryAdBanner | null
+    }
+  ) {
     if (props.activeTheme === 'gallery') {
       return (
         <GalleryPageLayout>
-          <GalleryShell siteTitle={props.siteTitle}>
+          <GalleryShell
+            siteTitle={props.siteTitle}
+            galleryAdBanner={props.galleryAdBanner ?? null}
+          >
             <WrappedComponent {...props} />
           </GalleryShell>
         </GalleryPageLayout>
