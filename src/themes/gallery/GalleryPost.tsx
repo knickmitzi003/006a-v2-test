@@ -89,9 +89,7 @@ export const GalleryPost = ({
 
             <GalleryPostContent postSlug={post.slug} blocks={blocks} />
 
-            <div className="lg:hidden">
-              <GalleryPostRecommendations posts={recommendations} />
-            </div>
+            <GalleryPostRecommendations posts={recommendations} />
 
             {galleryAdBanner ? <GalleryAdBanner banner={galleryAdBanner} /> : null}
           </article>

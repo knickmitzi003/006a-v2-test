@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { GalleryRecommendPost } from '@/src/lib/gallery/galleryRecommendations'
 
-const COVER_ASPECT = 'aspect-[10/13.35]'
+const COVER_ASPECT = 'aspect-[5/2]'
 
 function formatPostDate(iso: string) {
   if (!iso) return ''
@@ -67,9 +67,9 @@ export function GalleryPopularSidebar({
           <li key={item.slug}>
             <Link
               href={`/post/${item.slug}`}
-              className="group flex items-start gap-3.5"
+              className="group block"
             >
-              <div className="w-[92px] shrink-0 overflow-hidden rounded-md bg-neutral-100">
+              <div className="overflow-hidden rounded-md bg-neutral-100">
                 <div className={`relative ${COVER_ASPECT}`}>
                   {item.coverSrc ? (
                     <img
@@ -85,16 +85,14 @@ export function GalleryPopularSidebar({
                   )}
                 </div>
               </div>
-              <div className="min-w-0 flex-1 pt-0.5">
-                <p className="line-clamp-3 font-gallery text-[13px] font-normal leading-[1.45] tracking-[0.01em] text-neutral-900 transition-colors group-hover:text-neutral-500">
-                  {item.title}
+              <p className="mt-2.5 line-clamp-2 font-gallery text-[13px] font-normal leading-[1.45] tracking-[0.01em] text-neutral-900 transition-colors group-hover:text-neutral-500">
+                {item.title}
+              </p>
+              {item.date ? (
+                <p className="mt-1.5 font-gallery text-[12px] text-neutral-400">
+                  {formatPostDate(item.date)}
                 </p>
-                {item.date ? (
-                  <p className="mt-2 font-gallery text-[12px] text-neutral-400">
-                    {formatPostDate(item.date)}
-                  </p>
-                ) : null}
-              </div>
+              ) : null}
             </Link>
           </li>
         ))}
