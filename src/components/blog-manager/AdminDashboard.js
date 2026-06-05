@@ -175,7 +175,7 @@ const SlidingNav = ({ activeIdx, onSelect }) => {
 
 const SAVE_PHASE_META = {
   media: {
-    title: '正在压缩并上传正文图片',
+    title: '正在上传图片块',
     hint: '每张会先压缩到约几百 KB，再上传图床',
   },
   post: {
@@ -183,7 +183,7 @@ const SAVE_PHASE_META = {
     hint: '写入 Notion 页面与正文块…',
   },
   gallery: {
-    title: '正在压缩并上传图库',
+    title: '正在上传图库',
     hint: '批量处理中，请稍候',
   },
 };

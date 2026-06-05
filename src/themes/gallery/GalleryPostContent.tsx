@@ -5,7 +5,7 @@ import { BlockResponse } from '@/src/types/notion'
 import { GalleryImageGrid, useGalleryHasImages } from './GalleryImageGrid'
 import {
   filterGalleryBodyBlocks,
-  hasGalleryTextBody,
+  hasGalleryBodyContent,
 } from './galleryPostBlocks'
 import { galleryProseClass } from './galleryFonts'
 
@@ -18,14 +18,14 @@ const proseWrapClass = `${galleryProseClass} rounded-sm border border-neutral-20
 
 export function GalleryPostContent({ postSlug, blocks }: GalleryPostContentProps) {
   const { ready, hasGallery } = useGalleryHasImages(postSlug)
-  const bodyBlocks = filterGalleryBodyBlocks(blocks)
-  const showTextBody = hasGalleryTextBody(blocks)
+  const bodyBlocks = filterGalleryBodyBlocks(blocks, hasGallery)
+  const showBody = hasGalleryBodyContent(blocks, hasGallery)
 
   return (
     <>
       <GalleryImageGrid postSlug={postSlug} />
 
-      {ready && showTextBody ? (
+      {ready && showBody ? (
         <div className={hasGallery ? 'mt-8' : ''}>
           <div className={proseWrapClass}>
             <BlockRender blocks={bodyBlocks} />
@@ -33,9 +33,9 @@ export function GalleryPostContent({ postSlug, blocks }: GalleryPostContentProps
         </div>
       ) : null}
 
-      {ready && !hasGallery && !showTextBody ? (
+      {ready && !hasGallery && !showBody ? (
         <p className="py-6 text-center text-[13px] text-neutral-400">
-          暂无图库数据。请在后台「图库（Gallery · Supabase）」上传并保存；封面图块仅作列表封面，不会在此重复显示。
+          暂无正文与图库。可在后台添加正文块，或在「图库（Gallery · Supabase）」上传作品图集。
         </p>
       ) : null}
     </>
