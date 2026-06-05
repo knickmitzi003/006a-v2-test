@@ -61,12 +61,14 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     const safeTitle = page?.title ?? page?.nav ?? '下载说明'
 
     return {
-      props: {
-        ...sharedPageStaticProps.props,
-        page,
-        blocks: formattedBlocks || [],
-        title: safeTitle,
-      },
+      props: JSON.parse(
+        JSON.stringify({
+          ...sharedPageStaticProps.props,
+          page,
+          blocks: formattedBlocks || [],
+          title: safeTitle,
+        })
+      ),
     }
   }
 )

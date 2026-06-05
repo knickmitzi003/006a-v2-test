@@ -116,6 +116,8 @@ const CONFIG: BlogConfig = {
     ARCHIVE: 'archive',
     FREINDS: 'friends',
     ABOUT: 'about',
+    /** 下载说明（独立 pages/download.tsx，勿与 [page].tsx 重复生成） */
+    DOWNLOAD: 'download',
   },
   SITE_START_DATE: '2020',
   SITE_BEIAN: {
