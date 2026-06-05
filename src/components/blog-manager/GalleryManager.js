@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  mapWithConcurrency,
-  uploadGalleryImageToLsky,
-} from '@/src/lib/admin/lskyClientUpload'
-
-const UPLOAD_CONCURRENCY = 4
+  countPendingGalleryItems,
+  createPendingGalleryItem,
+  galleryPreviewUrl,
+  persistGalleryRemote,
+  remoteFromApiImage,
+  revokePendingGalleryItems,
+} from '@/src/lib/admin/galleryFlush'
 
 const btnSpinStyle = {
   width: '14px',
@@ -17,18 +19,26 @@ const btnSpinStyle = {
 }
 
 /**
- * Gallery 商用图库：批量上传兰空 + 写入 Supabase
+ * Gallery 图库：选图本地预览，发布/保存时由父组件统一上传兰空并写入 Supabase
  */
-export function GalleryManager({ postSlug, postTitle, postNotionId }) {
-  const [items, setItems] = useState([])
+export function GalleryManager({
+  postSlug,
+  postTitle,
+  postNotionId,
+  items,
+  onItemsChange,
+  onGalleryMutated,
+}) {
   const [loading, setLoading] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 })
   const [saving, setSaving] = useState(false)
   const [saveDone, setSaveDone] = useState(false)
   const [error, setError] = useState('')
 
   const slug = (postSlug || '').trim()
+  const pendingCount = countPendingGalleryItems(items)
+
+  const itemsRef = useRef(items)
+  itemsRef.current = items
 
   const loadGallery = useCallback(async () => {
     if (!slug) return
@@ -38,46 +48,51 @@ export function GalleryManager({ postSlug, postTitle, postNotionId }) {
       const r = await fetch(`/api/admin/gallery?slug=${encodeURIComponent(slug)}`)
       const d = await r.json()
       if (!d.success) throw new Error(d.error || '加载失败')
-      setItems((d.images || []).map((img) => ({ id: img.id, url: img.url })))
+      const remote = (d.images || []).map(remoteFromApiImage)
+      onItemsChange((prev) => {
+        const pending = (prev || []).filter((it) => it.status === 'pending')
+        return [...remote, ...pending]
+      })
     } catch (e) {
       setError(e.message)
-      setItems([])
+      onItemsChange((prev) => (prev || []).filter((it) => it.status === 'pending'))
     } finally {
       setLoading(false)
     }
-  }, [slug])
+  }, [slug, onItemsChange])
 
   useEffect(() => {
     loadGallery()
   }, [loadGallery])
 
-  const persistGallery = async (nextItems) => {
-    const res = await fetch('/api/admin/gallery', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        postSlug: slug,
-        postNotionId: postNotionId || null,
-        title: postTitle || null,
-        images: nextItems.map((it) => ({ url: it.url })),
-      }),
-    })
-    const d = await res.json()
-    if (!d.success) throw new Error(d.error || '保存失败')
-    return d
-  }
+  useEffect(() => {
+    return () => revokePendingGalleryItems(itemsRef.current)
+  }, [])
 
-  const saveGallery = async (itemsOverride) => {
+  const saveGallery = async () => {
     if (!slug) {
-      alert('请先保存文章（生成 slug）后再保存图库')
+      alert('缺少文章 slug，无法保存图库')
       return
     }
-    const payload = itemsOverride ?? items
+    const remoteItems = (items || []).filter((it) => it.status === 'remote')
+    if (!remoteItems.length && pendingCount > 0) {
+      alert('新选的图片尚未发布，请点击底部「确认发布 / 保存修改」后才会上传到图床。')
+      return
+    }
+    if (!remoteItems.length) {
+      alert('暂无已上传的图库图片可保存')
+      return
+    }
     setSaving(true)
     setSaveDone(false)
     setError('')
     try {
-      await persistGallery(payload)
+      await persistGalleryRemote({
+        slug,
+        postTitle,
+        postNotionId,
+        items,
+      })
       setSaveDone(true)
       setTimeout(() => setSaveDone(false), 2500)
       await loadGallery()
@@ -89,61 +104,43 @@ export function GalleryManager({ postSlug, postTitle, postNotionId }) {
     }
   }
 
-  const handleFiles = async (fileList) => {
+  const handleFiles = (fileList) => {
     const files = Array.from(fileList || []).filter((f) =>
       /^image\//i.test(f.type)
     )
     if (!files.length) return
     if (!slug) {
-      alert('请先保存文章一次（需要 slug），再上传图库')
+      alert('缺少文章 slug，无法添加图库')
       return
     }
-    setUploading(true)
-    setUploadProgress({ done: 0, total: files.length })
     setError('')
-    try {
-      let done = 0
-      const urls = await mapWithConcurrency(
-        files,
-        UPLOAD_CONCURRENCY,
-        async (file) => {
-          const url = await uploadGalleryImageToLsky(file)
-          done += 1
-          setUploadProgress({ done, total: files.length })
-          return url
-        }
-      )
-
-      const nextItems = [
-        ...items,
-        ...urls.map((url) => ({ id: `local-${url}`, url })),
-      ]
-      setItems(nextItems)
-      await persistGallery(nextItems)
-      setSaveDone(true)
-      setTimeout(() => setSaveDone(false), 2500)
-      await loadGallery()
-    } catch (e) {
-      setError(e.message)
-      alert('图库上传失败：' + e.message)
-    } finally {
-      setUploading(false)
-      setUploadProgress({ done: 0, total: 0 })
-    }
+    const pending = files.map(createPendingGalleryItem)
+    onItemsChange((prev) => [...(prev || []), ...pending])
+    onGalleryMutated?.()
   }
 
   const removeAt = (index) => {
-    setItems((prev) => prev.filter((_, i) => i !== index))
+    onItemsChange((prev) => {
+      const next = [...(prev || [])]
+      const removed = next[index]
+      if (removed?.status === 'pending' && removed.previewUrl) {
+        URL.revokeObjectURL(removed.previewUrl)
+      }
+      next.splice(index, 1)
+      return next
+    })
+    onGalleryMutated?.()
   }
 
   const move = (index, dir) => {
-    setItems((prev) => {
-      const next = [...prev]
+    onItemsChange((prev) => {
+      const next = [...(prev || [])]
       const target = index + dir
       if (target < 0 || target >= next.length) return prev
       ;[next[index], next[target]] = [next[target], next[index]]
       return next
     })
+    onGalleryMutated?.()
   }
 
   if (!slug) {
@@ -158,7 +155,7 @@ export function GalleryManager({ postSlug, postTitle, postNotionId }) {
           lineHeight: 1.6,
         }}
       >
-        请先点击底部「确认发布 / 保存修改」生成文章 slug 后，再管理图库。
+        缺少文章 slug，无法管理图库。
       </div>
     )
   }
@@ -166,10 +163,16 @@ export function GalleryManager({ postSlug, postTitle, postNotionId }) {
   return (
     <div>
       <p style={{ fontSize: '12px', color: '#888', margin: '0 0 12px', lineHeight: 1.7 }}>
-        图片上传到<b style={{ color: '#ccc' }}>兰空图床</b>（上传前自动压缩，节约空间），清单保存在
-        <b style={{ color: '#ccc' }}> Supabase</b>，上传完成后<b style={{ color: '#ccc' }}>自动保存</b>。前台
-        Gallery 内页分页展示。作品标识：
+        选图后<b style={{ color: '#ccc' }}>仅本地预览</b>，不占图床空间；点击底部
+        <b style={{ color: '#ccc' }}>确认发布 / 保存修改</b>后才会压缩上传到
+        <b style={{ color: '#ccc' }}>兰空</b>并写入
+        <b style={{ color: '#ccc' }}> Supabase</b>。作品标识：
         <code style={{ color: 'greenyellow' }}>{slug}</code>
+        {pendingCount > 0 ? (
+          <span style={{ color: '#f59e0b', marginLeft: '8px' }}>
+            · {pendingCount} 张待发布
+          </span>
+        ) : null}
       </p>
 
       <label
@@ -195,23 +198,14 @@ export function GalleryManager({ postSlug, postTitle, postNotionId }) {
             e.target.value = ''
           }}
         />
-        {uploading ? (
-          <div className="img-uploading">
-            <div className="img-spin" />
-            <div>
-              上传中… {uploadProgress.done}/{uploadProgress.total}
-            </div>
+        <div style={{ pointerEvents: 'none', textAlign: 'center' }}>
+          <div style={{ fontSize: '15px', color: '#fff', marginBottom: '6px' }}>
+            拖拽或点击 · 添加图库（本地预览）
           </div>
-        ) : (
-          <div style={{ pointerEvents: 'none', textAlign: 'center' }}>
-            <div style={{ fontSize: '15px', color: '#fff', marginBottom: '6px' }}>
-              拖拽或点击 · 批量上传图库
-            </div>
-            <div style={{ fontSize: '12px', color: '#777' }}>
-              支持多选 · 自动压缩 · 上传后自动写入数据库
-            </div>
+          <div style={{ fontSize: '12px', color: '#777' }}>
+            支持多选 · 发布/保存时自动压缩并上传
           </div>
-        )}
+        </div>
       </label>
 
       {loading ? (
@@ -221,7 +215,7 @@ export function GalleryManager({ postSlug, postTitle, postNotionId }) {
         <div style={{ color: '#ff7875', fontSize: '12px', marginBottom: '10px' }}>{error}</div>
       ) : null}
 
-      {items.length > 0 ? (
+      {items?.length > 0 ? (
         <div
           style={{
             display: 'grid',
@@ -232,18 +226,21 @@ export function GalleryManager({ postSlug, postTitle, postNotionId }) {
         >
           {items.map((it, index) => (
             <div
-              key={`${it.url}-${index}`}
+              key={`${it.id}-${index}`}
               style={{
                 position: 'relative',
                 aspectRatio: '3/4',
                 borderRadius: '8px',
                 overflow: 'hidden',
                 background: '#222',
-                border: '1px solid #444',
+                border:
+                  it.status === 'pending'
+                    ? '1px dashed #f59e0b'
+                    : '1px solid #444',
               }}
             >
               <img
-                src={it.url}
+                src={galleryPreviewUrl(it)}
                 alt=""
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
@@ -253,26 +250,42 @@ export function GalleryManager({ postSlug, postTitle, postNotionId }) {
                   inset: '0 0 auto 0',
                   display: 'flex',
                   justifyContent: 'space-between',
+                  alignItems: 'flex-start',
                   padding: '4px',
                   background: 'linear-gradient(to bottom, rgba(0,0,0,0.55), transparent)',
                 }}
               >
                 <span style={{ fontSize: '10px', color: '#fff' }}>{index + 1}</span>
-                <button
-                  type="button"
-                  onClick={() => removeAt(index)}
-                  style={{
-                    border: 'none',
-                    background: 'rgba(0,0,0,0.5)',
-                    color: '#ff7875',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    padding: '0 4px',
-                  }}
-                >
-                  ×
-                </button>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  {it.status === 'pending' ? (
+                    <span
+                      style={{
+                        fontSize: '9px',
+                        color: '#fbbf24',
+                        background: 'rgba(0,0,0,0.55)',
+                        padding: '1px 4px',
+                        borderRadius: '3px',
+                      }}
+                    >
+                      待发布
+                    </span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => removeAt(index)}
+                    style={{
+                      border: 'none',
+                      background: 'rgba(0,0,0,0.5)',
+                      color: '#ff7875',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      padding: '0 4px',
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
               <div
                 style={{
@@ -340,7 +353,7 @@ export function GalleryManager({ postSlug, postTitle, postNotionId }) {
       <button
         type="button"
         onClick={() => saveGallery()}
-        disabled={saving || uploading}
+        disabled={saving}
         style={{
           width: '100%',
           padding: '14px',
@@ -350,7 +363,7 @@ export function GalleryManager({ postSlug, postTitle, postNotionId }) {
           borderRadius: '10px',
           fontWeight: 'bold',
           fontSize: '14px',
-          cursor: saving || uploading ? 'not-allowed' : 'pointer',
+          cursor: saving ? 'not-allowed' : 'pointer',
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -360,12 +373,14 @@ export function GalleryManager({ postSlug, postTitle, postNotionId }) {
         {saving ? (
           <>
             <span style={btnSpinStyle} />
-            保存图库中…
+            保存排序中…
           </>
         ) : saveDone ? (
-          '✓ 图库已保存'
+          '✓ 排序已保存'
         ) : (
-          `手动保存排序（${items.length} 张）`
+          `手动保存排序（已上传 ${(items || []).filter((i) => i.status === 'remote').length} 张${
+            pendingCount ? ` · 待发布 ${pendingCount} 张` : ''
+          }）`
         )}
       </button>
     </div>

@@ -2,7 +2,23 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head'; // 🟢 引入 Head 组件控制浏览器标签
 import { GalleryManager } from './GalleryManager';
+import {
+  flushGalleryUploads,
+  revokePendingGalleryItems,
+  countPendingGalleryItems,
+} from '@/src/lib/admin/galleryFlush';
 import { uploadImageToLsky } from '@/src/lib/admin/lskyClientUpload';
+import {
+  createPendingImageBlock,
+  countPendingEditorMedia,
+  flushEditorBlocksMedia,
+  isLockImagePending,
+  revokeBlockPendingMedia,
+  revokePendingEditorMedia,
+  blocksToMarkdown,
+  resolveAutoCover,
+  serializeBlocksForSave,
+} from '@/src/lib/admin/contentMediaFlush';
 
 // ================= 1. 图标库 =================
 const Icons = {
@@ -284,45 +300,48 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
     scrollToBlock(newId);
   };
   const updateBlock = (id, val, key='content') => { setBlocks(blocks.map(b => b.id === id ? { ...b, [key]: val } : b)); };
-  const removeBlock = (id) => { setBlocks(blocks.filter(b => b.id !== id)); };
-
-  // === 🖼️ 图片上传逻辑 (兰空中转代理) ===
-  const newImageBlock = () => ({ id: Date.now() + Math.random(), type: 'image', content: '', pwd: '', uploading: false, error: '' });
-
-  const uploadOne = (file) => uploadImageToLsky(file);
-
-  // 上传单个文件并把结果写进指定块 (使用函数式更新，避免异步闭包拿到旧 state)
-  const uploadInto = async (blockId, file) => {
-    setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, uploading: true, error: '' } : b));
-    try {
-      const url = await uploadOne(file);
-      setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, content: url, uploading: false, error: '' } : b));
-    } catch (e) {
-      setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, uploading: false, error: e.message } : b));
-    }
+  const removeBlock = (id) => {
+    setBlocks(prev => {
+      const block = prev.find(b => b.id === id);
+      if (block) revokeBlockPendingMedia(block);
+      return prev.filter(b => b.id !== id);
+    });
   };
 
-  // 在指定块之后插入图片块并上传（不修改原块正文，供内容块拖入图片）
+  // === 🖼️ 图片：本地预览，发布/保存时再上传图床 ===
+  const assignPendingToBlock = (blockId, file) => {
+    const previewUrl = URL.createObjectURL(file);
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId) return b;
+      if (b.pendingFile && b.content?.startsWith('blob:')) URL.revokeObjectURL(b.content);
+      return {
+        ...b,
+        content: previewUrl,
+        pendingFile: file,
+        uploading: false,
+        error: '',
+      };
+    }));
+  };
+
   const insertImageBlocksAfter = (blockId, fileList) => {
     const files = Array.from(fileList || []).filter(f => /^(image|video)\//i.test(f.type));
     if (!files.length) return;
-    const created = files.map(newImageBlock);
+    const created = files.map(createPendingImageBlock);
     setBlocks(prev => {
       const idx = prev.findIndex(b => b.id === blockId);
       const next = [...prev];
       next.splice(idx === -1 ? next.length : idx + 1, 0, ...created);
       return next;
     });
-    created.forEach((blk, i) => uploadInto(blk.id, files[i]));
     scrollToBlock(created[created.length - 1].id);
   };
 
-  // 针对某个图片块的拖拽/选择：第一张填入当前块，多余的自动新建图片块
   const handleFilesForBlock = (blockId, fileList) => {
     const files = Array.from(fileList || []).filter(f => /^(image|video)\//i.test(f.type));
     if (!files.length) return;
     const [first, ...rest] = files;
-    const restBlocks = rest.map(newImageBlock);
+    const restBlocks = rest.map(createPendingImageBlock);
     if (restBlocks.length) {
       setBlocks(prev => {
         const idx = prev.findIndex(b => b.id === blockId);
@@ -331,8 +350,8 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
         return next;
       });
     }
-    uploadInto(blockId, first);
-    restBlocks.forEach((blk, i) => uploadInto(blk.id, rest[i]));
+    assignPendingToBlock(blockId, first);
+    if (restBlocks.length) scrollToBlock(restBlocks[restBlocks.length - 1].id);
   };
 
   const extractImageFilesFromDataTransfer = (dt) => {
@@ -367,34 +386,40 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
     return out;
   };
 
-  // 截图粘贴：在末尾批量新建图片块并上传
   const appendAndUpload = (fileList) => {
     const files = Array.from(fileList || []).filter(f => /^image\//i.test(f.type));
     if (!files.length) return;
-    const created = files.map(newImageBlock);
+    const created = files.map(createPendingImageBlock);
     setBlocks(prev => [...prev, ...created]);
-    created.forEach((blk, i) => uploadInto(blk.id, files[i]));
     scrollToBlock(created[created.length - 1].id);
   };
 
-  // 加密块专用：所有图片都收进同一个加密块的 images 数组，不另建块
-  const uploadIntoLock = async (blockId, fileList) => {
+  const assignPendingToLock = (blockId, fileList) => {
     const files = Array.from(fileList || []).filter(f => /^image\//i.test(f.type));
     if (!files.length) return;
-    setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, lockUploading: true, error: '' } : b));
-    for (const file of files) {
-      try {
-        const url = await uploadOne(file);
-        setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, images: [...(b.images || []), url] } : b));
-      } catch (e) {
-        setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, error: e.message } : b));
-      }
-    }
-    setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, lockUploading: false } : b));
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId) return b;
+      const additions = files.map(file => ({ url: URL.createObjectURL(file), file }));
+      return {
+        ...b,
+        error: '',
+        images: [...(b.images || []), ...additions.map(a => a.url)],
+        pendingImageFiles: [...(b.pendingImageFiles || []), ...additions],
+      };
+    }));
   };
 
   const removeLockImage = (blockId, idx) => {
-    setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, images: (b.images || []).filter((_, i) => i !== idx) } : b));
+    setBlocks(prev => prev.map(b => {
+      if (b.id !== blockId) return b;
+      const url = (b.images || [])[idx];
+      if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
+      return {
+        ...b,
+        images: (b.images || []).filter((_, i) => i !== idx),
+        pendingImageFiles: (b.pendingImageFiles || []).filter(p => p.url !== url),
+      };
+    }));
   };
 
   // 全局监听：Ctrl+V 粘贴截图（非内容块时追加到文末）
@@ -522,8 +547,11 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
                  {(b.images && b.images.length > 0) && (
                     <div style={{display:'flex', flexWrap:'wrap', gap:'8px', marginTop:'12px'}}>
                       {b.images.map((url, idx) => (
-                         <div key={idx} style={{position:'relative', width:'72px', height:'72px', borderRadius:'6px', overflow:'hidden', border:'1px solid #444'}}>
+                         <div key={idx} style={{position:'relative', width:'72px', height:'72px', borderRadius:'6px', overflow:'hidden', border: isLockImagePending(b, url) ? '1px dashed #f59e0b' : '1px solid #444'}}>
                            <img src={url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt="" />
+                           {isLockImagePending(b, url) ? (
+                             <span style={{position:'absolute', bottom:'2px', left:'2px', fontSize:'8px', color:'#fbbf24', background:'rgba(0,0,0,0.65)', padding:'1px 3px', borderRadius:'2px'}}>待发布</span>
+                           ) : null}
                            <div onClick={()=>removeLockImage(b.id, idx)} style={{position:'absolute', top:'2px', right:'2px', background:'#ff4d4f', color:'#fff', width:'16px', height:'16px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', cursor:'pointer', lineHeight:1}}>×</div>
                          </div>
                       ))}
@@ -531,11 +559,9 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
                  )}
                  <label className="img-drop" style={{minHeight:'72px', marginTop:'12px', padding:'12px'}}
                    onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
-                   onDrop={e => { e.preventDefault(); e.stopPropagation(); uploadIntoLock(b.id, e.dataTransfer.files); }}>
-                   <input type="file" accept="image/*" multiple style={{display:'none'}} onChange={e => { uploadIntoLock(b.id, e.target.files); e.target.value=''; }} />
-                   {b.lockUploading
-                     ? <div className="img-uploading"><div className="img-spin"></div><div style={{fontSize:'12px'}}>上传中...</div></div>
-                     : <div style={{pointerEvents:'none', fontSize:'13px'}}>🔒 拖拽 / 点击 添加加密图片（可多张，全部收进本块）</div>}
+                   onDrop={e => { e.preventDefault(); e.stopPropagation(); assignPendingToLock(b.id, e.dataTransfer.files); }}>
+                   <input type="file" accept="image/*" multiple style={{display:'none'}} onChange={e => { assignPendingToLock(b.id, e.target.files); e.target.value=''; }} />
+                   <div style={{pointerEvents:'none', fontSize:'13px'}}>🔒 拖拽 / 点击 添加加密图片（本地预览，保存后上传）</div>
                  </label>
                  {b.error && <div className="img-err">⚠ {b.error}</div>}
                </div>
@@ -554,14 +580,18 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
                       {/\.(mp4|mov|webm|ogg|mkv)(\?|$)/i.test(b.content)
                         ? <video src={b.content} controls className="img-preview" />
                         : <img src={b.content} className="img-preview" alt="" />}
-                      <div className="img-url">{b.content}</div>
+                      {b.pendingFile ? (
+                        <div style={{fontSize:'11px', color:'#f59e0b', marginTop:'6px', fontWeight:'bold'}}>待发布 · 保存后上传至图床</div>
+                      ) : (
+                        <div className="img-url">{b.content}</div>
+                      )}
                       <div style={{fontSize:'11px', color:'greenyellow', marginTop:'6px'}}>点击 / 拖拽 以更换</div>
                     </>
                  ) : (
                     <div style={{pointerEvents:'none'}}>
                       <div style={{fontSize:'34px', marginBottom:'8px'}}>🖼️</div>
                       <div style={{fontWeight:'bold', color:'#ccc'}}>拖拽图片到此 · 点击选择 · 直接粘贴</div>
-                      <div style={{fontSize:'12px', marginTop:'4px'}}>自动压缩并上传至图床（与图库共用限速队列）</div>
+                      <div style={{fontSize:'12px', marginTop:'4px'}}>本地预览，保存/发布时自动压缩并上传</div>
                     </div>
                  )}
                  {b.error && <div className="img-err">⚠ {b.error}</div>}
@@ -666,6 +696,27 @@ const [mounted, setMounted] = useState(false);
   const [friendDraftUploading, setFriendDraftUploading] = useState(false);
   const [friendBtnStatus, setFriendBtnStatus] = useState({}); // { [id|'draft']: 'saving' | 'done' }
   const [coverUploading, setCoverUploading] = useState(false);
+  const [galleryItems, setGalleryItems] = useState([]);
+  const [galleryDirty, setGalleryDirty] = useState(false);
+  const [savePhase, setSavePhase] = useState(''); // '' | 'post' | 'gallery'
+  const [galleryUploadProgress, setGalleryUploadProgress] = useState(null);
+
+  const resetGalleryItems = () => {
+    setGalleryItems((prev) => {
+      revokePendingGalleryItems(prev);
+      return [];
+    });
+    setGalleryDirty(false);
+  };
+
+  const leaveEditView = () => {
+    resetGalleryItems();
+    setEditorBlocks((prev) => {
+      revokePendingEditorMedia(prev);
+      return [];
+    });
+    setView('list');
+  };
 
   // 🟢 2. 增强表单校验逻辑：安全处理空值
   const isFormValid = (form?.type === 'Widget')
@@ -747,7 +798,7 @@ const [mounted, setMounted] = useState(false);
     } else {
       if (window.location.search.includes('mode=edit')) window.history.back();
     }
-    const onPopState = () => { if (view === 'edit') setView('list'); };
+    const onPopState = () => { if (view === 'edit') leaveEditView(); };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, [view]);
@@ -869,6 +920,11 @@ const [mounted, setMounted] = useState(false);
 
   const handleEdit = async (p) => {
     setLoading(true);
+    resetGalleryItems();
+    setEditorBlocks((prev) => {
+      revokePendingEditorMedia(prev);
+      return [];
+    });
     try {
       const post = await fetchPostById(p.id);
       if (post) {
@@ -888,7 +944,17 @@ const [mounted, setMounted] = useState(false);
   };
   
   // 🟢 修复：新建时默认 Published
-  const handleCreate = () => { setForm({ title: '', slug: 'p-'+Date.now().toString(36), excerpt:'', content:'', category:'', tags:'', cover:'', status:'Published', type: 'Post', date: new Date().toISOString().split('T')[0] }); setEditorBlocks([]); setCurrentId(null); setView('edit'); setExpandedStep(1); };
+  const handleCreate = () => {
+    resetGalleryItems();
+    setEditorBlocks((prev) => {
+      revokePendingEditorMedia(prev);
+      return [];
+    });
+    setForm({ title: '', slug: 'p-'+Date.now().toString(36), excerpt:'', content:'', category:'', tags:'', cover:'', status:'Published', type: 'Post', date: new Date().toISOString().split('T')[0] });
+    setCurrentId(null);
+    setView('edit');
+    setExpandedStep(1);
+  };
 
   // === 🔗 友链管理 ===
   const uploadAvatarFile = (file) => uploadImageToLsky(file);
@@ -1035,36 +1101,32 @@ const [mounted, setMounted] = useState(false);
     }
 
     setLoading(true);
-    const fullContent = editorBlocks.map(b => {
-      if (b.type === 'h1') return `# ${b.content}`;
-      if (b.type === 'note') return `\`${b.content}\``;
-      if (b.type === 'quote') return (b.content || '').split(/\r?\n/).map(l => `> ${l}`).join('\n');
-      if (b.type === 'link') return b.url ? `[${b.content || b.url}](${b.url})` : (b.content || '');
-      if (b.type === 'lock') {
-        const imgLines = (b.images || []).map(u => `![](${u})`);
-        const parts = [];
-        if (b.content && b.content.trim()) parts.push(b.content);
-        imgLines.forEach(l => parts.push(l));
-        return `:::lock ${b.pwd}\n${parts.join('\n')}\n:::`;
+    setGalleryUploadProgress(null);
+
+    let blocksForSave = editorBlocks;
+    const pendingMediaCount = countPendingEditorMedia(editorBlocks);
+    if (pendingMediaCount > 0) {
+      setSavePhase('media');
+      try {
+        blocksForSave = await flushEditorBlocksMedia(editorBlocks, {
+          onProgress: ({ done, total }) => setGalleryUploadProgress({ done, total }),
+        });
+        setEditorBlocks(blocksForSave);
+      } catch (e) {
+        alert(`正文图片上传失败：\n\n${e.message}\n\n请重试保存。`);
+        setLoading(false);
+        setSavePhase('');
+        setGalleryUploadProgress(null);
+        return;
       }
-      if (b.type === 'image') return b.content ? `![](${b.content})` : '';
-      return b.content;
-    }).filter(s => s !== '').join('\n\n');
+    }
 
-    // 🟢 结构化数据(带整块格式)，后端优先用它来生成 Notion 块；Markdown 作为兜底
-    const blocksData = editorBlocks.map(b => ({
-      type: b.type,
-      content: b.content || '',
-      pwd: b.pwd || '',
-      url: b.url || '',
-      images: b.images || [],
-      bold: !!b.bold,
-      italic: !!b.italic,
-      color: b.color || 'default',
-    }));
+    setSavePhase('post');
+    const fullContent = blocksToMarkdown(blocksForSave);
 
-    // 🟢 封面自动化：取正文中第一个图片块作为封面；无图片块则留空(前端显示默认封面)
-    const autoCover = editorBlocks.find(b => b.type === 'image' && b.content)?.content || '';
+    const blocksData = serializeBlocksForSave(blocksForSave);
+
+    const autoCover = resolveAutoCover(blocksForSave);
 
     try {
       const res = await fetch('/api/admin/post', {
@@ -1085,7 +1147,31 @@ const [mounted, setMounted] = useState(false);
       if (!d.success) {
         alert(`❌ 保存失败！\n\n错误信息:\n${d.error}`);
       } else {
+        const newId = d.id || currentId;
+        if (newId && newId !== currentId) setCurrentId(newId);
+
+        const shouldSyncGallery =
+          galleryDirty || countPendingGalleryItems(galleryItems) > 0;
+        if (shouldSyncGallery) {
+          setSavePhase('gallery');
+          try {
+            const updated = await flushGalleryUploads({
+              slug: form.slug,
+              postTitle: form.title,
+              postNotionId: newId,
+              items: galleryItems,
+              onProgress: ({ done, total }) => setGalleryUploadProgress({ done, total }),
+            });
+            setGalleryItems(updated);
+            setGalleryDirty(false);
+          } catch (e) {
+            alert(`✅ 文章已保存，但图库上传失败：\n\n${e.message}\n\n请留在本页重试保存。`);
+            return;
+          }
+        }
+
         alert("✅ 保存成功！");
+        resetGalleryItems();
         setView('list');
         fetchPosts();
       }
@@ -1093,6 +1179,8 @@ const [mounted, setMounted] = useState(false);
       alert('网络错误: ' + e.message);
     } finally {
       setLoading(false);
+      setSavePhase('');
+      setGalleryUploadProgress(null);
     }
   };
 
@@ -1228,7 +1316,7 @@ const [mounted, setMounted] = useState(false);
              <button onClick={handleManualDeploy} style={{background:'#424242', border: isDeploying ? '1px solid #555' : '1px solid greenyellow', opacity: isDeploying ? 0.5 : 1, padding:'10px', borderRadius:'8px', color: isDeploying ? '#888' : 'greenyellow', cursor: isDeploying ? 'not-allowed' : 'pointer'}} title="立即更新博客前端">
                <Icons.Refresh />
              </button>
-             {view === 'list' ? <AnimatedBtn text="发布新内容" onClick={handleCreate} /> : <AnimatedBtn text="返回列表" onClick={() => setView('list')} />}
+             {view === 'list' ? <AnimatedBtn text="发布新内容" onClick={handleCreate} /> : <AnimatedBtn text="返回列表" onClick={leaveEditView} />}
            </div>
         </header>
 
@@ -1517,7 +1605,7 @@ const [mounted, setMounted] = useState(false);
                  <p style={{fontSize:'11px', color:'#777', margin:'0 0 8px', lineHeight:1.5}}>Gallery 主题会展示下载按钮，对应此处填写内容。可写说明 + 链接，例如：欢迎下载-https://example.com</p>
                  <input className="glow-input" value={form.download || ''} onChange={e=>setForm({...form, download:e.target.value})} placeholder="说明文字与链接，留空则前台提示「暂无下载」" style={{fontSize:'13px'}} />
                </div>
-               <div style={{marginTop:'16px', fontSize:'12px', color:'#999', background:'#202024', borderRadius:'8px', padding:'12px 14px', lineHeight:1.7, border:'1px solid #333'}}>🖼️ <b style={{color:'greenyellow'}}>封面说明</b>：系统会自动把<b style={{color:'#fff'}}>排在第一位的图片块</b>用作列表卡片封面；<b style={{color:'#fff'}}>不会</b>在正文重复显示。大图库请在 Step 4「图库」批量上传（自动压缩并保存）；调整顺序后点「手动保存排序」。</div>
+               <div style={{marginTop:'16px', fontSize:'12px', color:'#999', background:'#202024', borderRadius:'8px', padding:'12px 14px', lineHeight:1.7, border:'1px solid #333'}}>🖼️ <b style={{color:'greenyellow'}}>封面说明</b>：保存后系统会把<b style={{color:'#fff'}}>第一个图片块</b>的图床链接写入 Notion <b style={{color:'#fff'}}>cover</b> 并在内页嵌入；列表卡片也用该图。大图库请在 Step 4 批量添加（本地预览，保存后上传）。</div>
             </StepAccordion>
             <StepAccordion step={2} title="分类与时间" isOpen={expandedStep === 2} onToggle={()=>setExpandedStep(expandedStep===2?0:2)}>
                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
@@ -1560,7 +1648,14 @@ const [mounted, setMounted] = useState(false);
             </StepAccordion>
 
             <StepAccordion step={4} title="图库（Gallery · Supabase）" isOpen={expandedStep === 4} onToggle={()=>setExpandedStep(expandedStep===4?0:4)}>
-              <GalleryManager postSlug={form.slug} postTitle={form.title} postNotionId={currentId} />
+              <GalleryManager
+                postSlug={form.slug}
+                postTitle={form.title}
+                postNotionId={currentId}
+                items={galleryItems}
+                onItemsChange={setGalleryItems}
+                onGalleryMutated={() => setGalleryDirty(true)}
+              />
             </StepAccordion>
             
             <BlockBuilder blocks={editorBlocks} setBlocks={setEditorBlocks} />
@@ -1570,7 +1665,21 @@ const [mounted, setMounted] = useState(false);
               <div className="fab-btn" onClick={() => window.scrollTo({top:99999, behavior:'smooth'})}><Icons.ArrowDown /></div>
             </div>
 
-            <button onClick={attemptSave} title={isFormValid ? '' : (getMissingFieldMsg() || '')} style={{width:'100%', padding:'20px', background:isFormValid?'#fff':'#222', color:isFormValid?'#000':'#666', border:'none', borderRadius:'12px', fontWeight:'bold', fontSize:'16px', marginTop:'40px', cursor:'pointer', transition:'0.3s'}}>{currentId ? '保存修改' : '确认发布'}</button>
+            <button onClick={attemptSave} disabled={loading} title={isFormValid ? '' : (getMissingFieldMsg() || '')} style={{width:'100%', padding:'20px', background:isFormValid && !loading?'#fff':'#222', color:isFormValid && !loading?'#000':'#666', border:'none', borderRadius:'12px', fontWeight:'bold', fontSize:'16px', marginTop:'40px', cursor: loading ? 'wait' : 'pointer', transition:'0.3s'}}>
+              {loading && savePhase === 'media'
+                ? galleryUploadProgress
+                  ? `上传正文图片 ${galleryUploadProgress.done}/${galleryUploadProgress.total}…`
+                  : '准备上传正文图片…'
+                : loading && savePhase === 'post'
+                ? '保存文章中…'
+                : loading && savePhase === 'gallery'
+                  ? galleryUploadProgress
+                    ? `上传图库 ${galleryUploadProgress.done}/${galleryUploadProgress.total}…`
+                    : '同步图库…'
+                  : currentId
+                    ? '保存修改'
+                    : '确认发布'}
+            </button>
           </div>
         )}
         {previewData && <div className="modal-bg" onClick={()=>setPreviewData(null)}><div className="modal-box" onClick={e=>e.stopPropagation()}><div style={{padding:'20px 25px', borderBottom:'1px solid #333', display:'flex', justifyContent:'space-between', alignItems:'center'}}><strong>预览: {previewData.title}</strong><button onClick={()=>setPreviewData(null)} style={{background:'none', border:'none', color:'#666', fontSize:'24px', cursor:'pointer'}}>×</button></div><div className="modal-body"><NotionView blocks={previewData.rawBlocks} /></div></div></div>}

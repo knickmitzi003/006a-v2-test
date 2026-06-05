@@ -393,9 +393,10 @@ export default async function handler(req, res) {
         }
       } else {
         const newBlocks = useStructured ? structuredToBlocks(blocksData) : mdToBlocks(content || "");
-        await withRetry(() => notion.pages.create({ parent: { database_id: databaseId }, properties: props, children: newBlocks.slice(0, 100) }));
+        const page = await withRetry(() => notion.pages.create({ parent: { database_id: databaseId }, properties: props, children: newBlocks.slice(0, 100) }));
+        return res.status(200).json({ success: true, id: page.id });
       }
-      return res.status(200).json({ success: true });
+      return res.status(200).json({ success: true, id });
     }
 
     if (req.method === 'DELETE') {
