@@ -355,49 +355,19 @@ html.dark .prose-gallery .cursor-pointer {
   color: #171717 !important;
 }
 
-/* Gallery 高级感转圈加载 */
-@keyframes gallery-spinner-rotate {
+/* Gallery 内页全量加载转圈（真实 DOM，避免伪元素动画失效） */
+@keyframes gallery-loader-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-.gallery-spinner {
-  position: relative;
-  width: 44px;
-  height: 44px;
-  flex-shrink: 0;
+.gallery-loader-orbit__ring {
+  animation: gallery-loader-spin 0.88s cubic-bezier(0.5, 0.1, 0.3, 0.9) infinite;
 }
 
-.gallery-spinner::before,
-.gallery-spinner::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid transparent;
-}
-
-.gallery-spinner::before {
-  border-top-color: #171717;
-  border-right-color: #171717;
-  animation: gallery-spinner-rotate 0.9s cubic-bezier(0.55, 0.15, 0.35, 0.85) infinite;
-}
-
-.gallery-spinner::after {
-  inset: 7px;
-  border-bottom-color: #c4c4c4;
-  border-left-color: #d4d4d4;
-  animation: gallery-spinner-rotate 1.35s cubic-bezier(0.55, 0.15, 0.35, 0.85) infinite reverse;
-}
-
-.gallery-spinner--sm {
-  width: 28px;
-  height: 28px;
-}
-
-.gallery-spinner--sm::after {
-  inset: 5px;
+.gallery-loader-orbit__ring-inner {
+  animation: gallery-loader-spin 1.25s cubic-bezier(0.5, 0.1, 0.3, 0.9) infinite reverse;
 }
 
 /* Gallery 图库骨架屏与入场过渡 */
@@ -543,8 +513,8 @@ html.dark .prose-gallery .cursor-pointer {
   .gallery-grid-load-more-item,
   .gallery-load-more-skeleton,
   .gallery-grid-image-shimmer,
-  .gallery-spinner::before,
-  .gallery-spinner::after {
+  .gallery-loader-orbit__ring,
+  .gallery-loader-orbit__ring-inner {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
