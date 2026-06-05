@@ -44,9 +44,11 @@ export function GalleryGridImage({
     >
       {!loaded ? (
         <div
-          className="gallery-grid-image-shimmer absolute inset-0 z-[1]"
+          className="absolute inset-0 z-[1] flex items-center justify-center bg-neutral-50"
           aria-hidden
-        />
+        >
+          <div className="gallery-spinner gallery-spinner--sm" />
+        </div>
       ) : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img

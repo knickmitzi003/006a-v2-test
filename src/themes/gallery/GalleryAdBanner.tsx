@@ -15,7 +15,7 @@ export function GalleryAdBanner({ banner }: GalleryAdBannerProps) {
           href={url}
           target="_blank"
           rel="noopener noreferrer sponsored"
-          className="group relative flex h-14 w-full items-center overflow-hidden rounded-lg shadow-[0_1px_6px_rgba(0,0,0,0.1)] ring-1 ring-black/5 transition-shadow duration-200 hover:shadow-[0_2px_10px_rgba(0,0,0,0.14)] sm:h-16"
+          className="group relative flex h-16 w-full items-center overflow-hidden rounded-lg shadow-[0_1px_6px_rgba(0,0,0,0.1)] ring-1 ring-black/5 transition-shadow duration-200 hover:shadow-[0_2px_10px_rgba(0,0,0,0.14)] sm:h-[72px]"
         >
           <img
             src={imageSrc}
