@@ -20,6 +20,13 @@ const btnSpinStyle = {
   display: 'inline-block',
 }
 
+const sortModeKeyframes = `
+@keyframes gallery-sort-wiggle {
+  0%, 100% { transform: rotate(-0.6deg); }
+  50% { transform: rotate(0.6deg); }
+}
+`
+
 /**
  * Gallery 图库：选图本地预览，发布/保存时由父组件统一上传兰空并写入 Supabase
  */
@@ -35,6 +42,9 @@ export function GalleryManager({
   const [saving, setSaving] = useState(false)
   const [saveDone, setSaveDone] = useState(false)
   const [error, setError] = useState('')
+  const [sortMode, setSortMode] = useState(false)
+  const [dragIndex, setDragIndex] = useState(null)
+  const [overIndex, setOverIndex] = useState(null)
 
   const slug = (postSlug || '').trim()
   const pendingCount = countPendingGalleryItems(items)
@@ -71,20 +81,39 @@ export function GalleryManager({
     return () => revokePendingGalleryItems(itemsRef.current)
   }, [])
 
-  const saveGallery = async () => {
+  const reorderItems = (from, to) => {
+    if (from === to || from == null || to == null) return
+    onItemsChange((prev) => {
+      const next = [...(prev || [])]
+      if (from < 0 || from >= next.length || to < 0 || to >= next.length) return prev
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+    onGalleryMutated?.()
+  }
+
+  const exitSortMode = () => {
+    setSortMode(false)
+    setDragIndex(null)
+    setOverIndex(null)
+  }
+
+  const saveSortOrder = async () => {
     if (!slug) {
-      alert('缺少文章 slug，无法保存图库')
+      alert('缺少文章 slug，无法保存排序')
       return
     }
+    exitSortMode()
+    onGalleryMutated?.()
+
     const remoteItems = (items || []).filter((it) => it.status === 'remote')
-    if (!remoteItems.length && pendingCount > 0) {
-      alert('新选的图片尚未发布，请点击底部「确认发布 / 保存修改」后才会上传到图床。')
-      return
-    }
     if (!remoteItems.length) {
-      alert('暂无已上传的图库图片可保存')
+      setSaveDone(true)
+      setTimeout(() => setSaveDone(false), 2000)
       return
     }
+
     setSaving(true)
     setSaveDone(false)
     setError('')
@@ -100,13 +129,24 @@ export function GalleryManager({
       await loadGallery()
     } catch (e) {
       setError(e.message)
-      alert('图库保存失败：' + e.message)
+      alert('图库排序保存失败：' + e.message)
     } finally {
       setSaving(false)
     }
   }
 
+  const handleSortButton = () => {
+    if (saving) return
+    if (!sortMode) {
+      setSortMode(true)
+      setSaveDone(false)
+      return
+    }
+    saveSortOrder()
+  }
+
   const handleFiles = async (fileList) => {
+    if (sortMode) return
     const files = Array.from(fileList || []).filter((f) =>
       /^image\//i.test(f.type)
     )
@@ -131,6 +171,7 @@ export function GalleryManager({
   }
 
   const removeAt = (index) => {
+    if (sortMode) return
     onItemsChange((prev) => {
       const next = [...(prev || [])]
       const removed = next[index]
@@ -143,15 +184,39 @@ export function GalleryManager({
     onGalleryMutated?.()
   }
 
-  const move = (index, dir) => {
-    onItemsChange((prev) => {
-      const next = [...(prev || [])]
-      const target = index + dir
-      if (target < 0 || target >= next.length) return prev
-      ;[next[index], next[target]] = [next[target], next[index]]
-      return next
-    })
-    onGalleryMutated?.()
+  const handleDragStart = (e, index) => {
+    if (!sortMode) return
+    setDragIndex(index)
+    setOverIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(index))
+    if (e.currentTarget) {
+      e.currentTarget.style.opacity = '0.45'
+    }
+  }
+
+  const handleDragEnd = (e) => {
+    if (e.currentTarget) {
+      e.currentTarget.style.opacity = '1'
+    }
+    setDragIndex(null)
+    setOverIndex(null)
+  }
+
+  const handleDragOver = (e, index) => {
+    if (!sortMode || dragIndex === null) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (overIndex !== index) setOverIndex(index)
+  }
+
+  const handleDrop = (e, index) => {
+    if (!sortMode || dragIndex === null) return
+    e.preventDefault()
+    const from = dragIndex
+    reorderItems(from, index)
+    setDragIndex(null)
+    setOverIndex(null)
   }
 
   if (!slug) {
@@ -173,51 +238,57 @@ export function GalleryManager({
 
   return (
     <div>
-      <p style={{ fontSize: '12px', color: '#888', margin: '0 0 12px', lineHeight: 1.7 }}>
-        选图后<b style={{ color: '#ccc' }}>仅本地预览</b>，不占图床空间；点击底部
-        <b style={{ color: '#ccc' }}>确认发布 / 保存修改</b>后才会压缩上传到
-        <b style={{ color: '#ccc' }}>兰空</b>并写入
-        <b style={{ color: '#ccc' }}> Supabase</b>。作品标识：
-        <code style={{ color: 'greenyellow' }}>{slug}</code>
-        {pendingCount > 0 ? (
-          <span style={{ color: '#f59e0b', marginLeft: '8px' }}>
-            · {pendingCount} 张待发布
-          </span>
-        ) : null}
-      </p>
+      <style>{sortModeKeyframes}</style>
 
-      <label
-        className="img-drop"
-        style={{ minHeight: '100px', marginBottom: '16px' }}
-        onDragOver={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-        }}
-        onDrop={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          handleFiles(e.dataTransfer.files)
-        }}
-      >
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          style={{ display: 'none' }}
-          onChange={(e) => {
-            handleFiles(e.target.files)
-            e.target.value = ''
+      {!sortMode ? (
+        <label
+          className="img-drop"
+          style={{ minHeight: '100px', marginBottom: '16px' }}
+          onDragOver={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
           }}
-        />
-        <div style={{ pointerEvents: 'none', textAlign: 'center' }}>
-          <div style={{ fontSize: '15px', color: '#fff', marginBottom: '6px' }}>
-            拖拽或点击 · 添加图库（本地预览）
+          onDrop={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            handleFiles(e.dataTransfer.files)
+          }}
+        >
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              handleFiles(e.target.files)
+              e.target.value = ''
+            }}
+          />
+          <div style={{ pointerEvents: 'none', textAlign: 'center' }}>
+            <div style={{ fontSize: '15px', color: '#fff', marginBottom: '6px' }}>
+              拖拽或点击 · 添加图库
+            </div>
+            <div style={{ fontSize: '12px', color: '#777' }}>
+              支持多选 · 发布/保存时自动压缩并上传
+            </div>
           </div>
-          <div style={{ fontSize: '12px', color: '#777' }}>
-            支持多选 · 发布/保存时自动压缩并上传
-          </div>
+        </label>
+      ) : (
+        <div
+          style={{
+            marginBottom: '16px',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            background: 'rgba(173, 255, 47, 0.08)',
+            border: '1px solid rgba(173, 255, 47, 0.35)',
+            color: '#c5e87a',
+            fontSize: '13px',
+            textAlign: 'center',
+          }}
+        >
+          拖拽模式：拖动图片到目标位置，松手即可插入 · 完成后点击「保存排序」
         </div>
-      </label>
+      )}
 
       {loading ? (
         <div style={{ color: '#888', fontSize: '13px', padding: '12px 0' }}>加载图库…</div>
@@ -235,115 +306,153 @@ export function GalleryManager({
             marginBottom: '16px',
           }}
         >
-          {items.map((it, index) => (
-            <div
-              key={`${it.id}-${index}`}
-              style={{
-                position: 'relative',
-                aspectRatio: '3/4',
-                borderRadius: '8px',
-                overflow: 'hidden',
-                background: '#222',
-                border:
-                  it.status === 'pending'
-                    ? '1px dashed #f59e0b'
-                    : '1px solid #444',
-              }}
-            >
-              <img
-                src={galleryPreviewUrl(it)}
-                alt=""
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
+          {items.map((it, index) => {
+            const isDragging = sortMode && dragIndex === index
+            const isDropTarget =
+              sortMode && overIndex === index && dragIndex !== null && dragIndex !== index
+            const showInsertBefore =
+              sortMode &&
+              dragIndex !== null &&
+              overIndex === index &&
+              dragIndex > index
+            const showInsertAfter =
+              sortMode &&
+              dragIndex !== null &&
+              overIndex === index &&
+              dragIndex < index
+
+            return (
               <div
+                key={`${it.id}-${index}`}
+                draggable={sortMode}
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={(e) => handleDrop(e, index)}
                 style={{
-                  position: 'absolute',
-                  inset: '0 0 auto 0',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  padding: '4px',
-                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.55), transparent)',
+                  position: 'relative',
+                  aspectRatio: '3/4',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  background: isDropTarget ? '#1a2a12' : '#222',
+                  border: isDropTarget
+                    ? '2px solid greenyellow'
+                    : it.status === 'pending'
+                      ? '1px dashed #f59e0b'
+                      : '1px solid #444',
+                  boxShadow: isDropTarget
+                    ? '0 0 0 3px rgba(173, 255, 47, 0.25), 0 8px 20px rgba(0,0,0,0.35)'
+                    : isDragging
+                      ? '0 12px 28px rgba(0,0,0,0.45)'
+                      : 'none',
+                  transform: isDropTarget
+                    ? 'scale(1.06)'
+                    : isDragging
+                      ? 'scale(0.92)'
+                      : sortMode
+                        ? 'scale(1)'
+                        : 'none',
+                  transition:
+                    'transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 0.18s ease, border-color 0.15s ease, background 0.15s ease',
+                  cursor: sortMode ? (isDragging ? 'grabbing' : 'grab') : 'default',
+                  animation:
+                    sortMode && !isDragging ? 'gallery-sort-wiggle 0.35s ease-in-out infinite' : 'none',
+                  animationDelay: sortMode ? `${(index % 6) * 0.05}s` : '0s',
+                  zIndex: isDragging ? 20 : isDropTarget ? 10 : 1,
                 }}
               >
-                <span style={{ fontSize: '10px', color: '#fff' }}>{index + 1}</span>
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                  {it.status === 'pending' ? (
-                    <span
-                      style={{
-                        fontSize: '9px',
-                        color: '#fbbf24',
-                        background: 'rgba(0,0,0,0.55)',
-                        padding: '1px 4px',
-                        borderRadius: '3px',
-                      }}
-                    >
-                      待发布
-                    </span>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => removeAt(index)}
+                {showInsertBefore ? (
+                  <div
                     style={{
-                      border: 'none',
-                      background: 'rgba(0,0,0,0.5)',
-                      color: '#ff7875',
+                      position: 'absolute',
+                      left: '-6px',
+                      top: '6%',
+                      bottom: '6%',
+                      width: '4px',
                       borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      padding: '0 4px',
+                      background: 'greenyellow',
+                      boxShadow: '0 0 10px greenyellow',
+                      zIndex: 30,
                     }}
-                  >
-                    ×
-                  </button>
+                  />
+                ) : null}
+                {showInsertAfter ? (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      right: '-6px',
+                      top: '6%',
+                      bottom: '6%',
+                      width: '4px',
+                      borderRadius: '4px',
+                      background: 'greenyellow',
+                      boxShadow: '0 0 10px greenyellow',
+                      zIndex: 30,
+                    }}
+                  />
+                ) : null}
+
+                <img
+                  src={galleryPreviewUrl(it)}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    pointerEvents: 'none',
+                    userSelect: 'none',
+                  }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: '0 0 auto 0',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    padding: '4px',
+                    background: 'linear-gradient(to bottom, rgba(0,0,0,0.55), transparent)',
+                    pointerEvents: sortMode ? 'none' : 'auto',
+                  }}
+                >
+                  <span style={{ fontSize: '10px', color: '#fff' }}>{index + 1}</span>
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    {it.status === 'pending' ? (
+                      <span
+                        style={{
+                          fontSize: '9px',
+                          color: '#fbbf24',
+                          background: 'rgba(0,0,0,0.55)',
+                          padding: '1px 4px',
+                          borderRadius: '3px',
+                        }}
+                      >
+                        待发布
+                      </span>
+                    ) : null}
+                    {!sortMode ? (
+                      <button
+                        type="button"
+                        onClick={() => removeAt(index)}
+                        style={{
+                          border: 'none',
+                          background: 'rgba(0,0,0,0.5)',
+                          color: '#ff7875',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          padding: '0 4px',
+                        }}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: '4px',
-                  left: '4px',
-                  right: '4px',
-                  display: 'flex',
-                  gap: '4px',
-                  justifyContent: 'center',
-                }}
-              >
-                <button
-                  type="button"
-                  disabled={index === 0}
-                  onClick={() => move(index, -1)}
-                  style={{
-                    flex: 1,
-                    fontSize: '10px',
-                    border: 'none',
-                    borderRadius: '4px',
-                    padding: '2px 0',
-                    cursor: index === 0 ? 'not-allowed' : 'pointer',
-                    opacity: index === 0 ? 0.4 : 1,
-                  }}
-                >
-                  ←
-                </button>
-                <button
-                  type="button"
-                  disabled={index === items.length - 1}
-                  onClick={() => move(index, 1)}
-                  style={{
-                    flex: 1,
-                    fontSize: '10px',
-                    border: 'none',
-                    borderRadius: '4px',
-                    padding: '2px 0',
-                    cursor: index === items.length - 1 ? 'not-allowed' : 'pointer',
-                    opacity: index === items.length - 1 ? 0.4 : 1,
-                  }}
-                >
-                  →
-                </button>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       ) : (
         <div
@@ -361,39 +470,46 @@ export function GalleryManager({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => saveGallery()}
-        disabled={saving}
-        style={{
-          width: '100%',
-          padding: '14px',
-          background: saveDone ? '#4dab6d' : 'greenyellow',
-          color: saveDone ? '#fff' : '#000',
-          border: 'none',
-          borderRadius: '10px',
-          fontWeight: 'bold',
-          fontSize: '14px',
-          cursor: saving ? 'not-allowed' : 'pointer',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-        }}
-      >
-        {saving ? (
-          <>
-            <span style={btnSpinStyle} />
-            保存排序中…
-          </>
-        ) : saveDone ? (
-          '✓ 排序已保存'
-        ) : (
-          `手动保存排序（已上传 ${(items || []).filter((i) => i.status === 'remote').length} 张${
-            pendingCount ? ` · 待发布 ${pendingCount} 张` : ''
-          }）`
-        )}
-      </button>
+      {items?.length > 0 ? (
+        <button
+          type="button"
+          onClick={handleSortButton}
+          disabled={saving}
+          style={{
+            width: '100%',
+            padding: '14px',
+            background: sortMode
+              ? '#fff'
+              : saveDone
+                ? '#4dab6d'
+                : 'greenyellow',
+            color: sortMode ? '#000' : saveDone ? '#fff' : '#000',
+            border: sortMode ? '2px solid greenyellow' : 'none',
+            borderRadius: '10px',
+            fontWeight: 'bold',
+            fontSize: '14px',
+            cursor: saving ? 'not-allowed' : 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            transition: 'background 0.2s ease, color 0.2s ease',
+          }}
+        >
+          {saving ? (
+            <>
+              <span style={btnSpinStyle} />
+              保存排序中…
+            </>
+          ) : saveDone && !sortMode ? (
+            '✓ 排序已保存'
+          ) : sortMode ? (
+            '保存排序'
+          ) : (
+            '调整排序'
+          )}
+        </button>
+      ) : null}
     </div>
   )
 }

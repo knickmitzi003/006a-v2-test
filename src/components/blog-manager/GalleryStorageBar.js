@@ -95,7 +95,7 @@ export function GalleryStorageBar({ stats, loading, error }) {
               color: '#888',
             }}
           >
-            Supabase 记录 · 压缩后体积
+            当前占用
           </span>
         </div>
         <div style={{ fontSize: '13px', color: '#ccc' }}>
