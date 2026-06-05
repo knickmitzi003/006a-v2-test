@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head'; // 🟢 引入 Head 组件控制浏览器标签
 import { GalleryManager } from './GalleryManager';
+import { uploadImageToLsky } from '@/src/lib/admin/lskyClientUpload';
 
 // ================= 1. 图标库 =================
 const Icons = {
@@ -288,19 +289,7 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
   // === 🖼️ 图片上传逻辑 (兰空中转代理) ===
   const newImageBlock = () => ({ id: Date.now() + Math.random(), type: 'image', content: '', pwd: '', uploading: false, error: '' });
 
-  const uploadOne = async (file) => {
-    const res = await fetch('/api/admin/upload', {
-      method: 'POST',
-      headers: {
-        'content-type': file.type || 'application/octet-stream',
-        'x-file-name': encodeURIComponent(file.name || 'image.png'),
-      },
-      body: file,
-    });
-    const d = await res.json();
-    if (!d.success) throw new Error(d.error || '上传失败');
-    return d.url;
-  };
+  const uploadOne = (file) => uploadImageToLsky(file);
 
   // 上传单个文件并把结果写进指定块 (使用函数式更新，避免异步闭包拿到旧 state)
   const uploadInto = async (blockId, file) => {
@@ -836,16 +825,7 @@ const [mounted, setMounted] = useState(false);
   const handleCreate = () => { setForm({ title: '', slug: 'p-'+Date.now().toString(36), excerpt:'', content:'', category:'', tags:'', cover:'', status:'Published', type: 'Post', date: new Date().toISOString().split('T')[0] }); setEditorBlocks([]); setCurrentId(null); setView('edit'); setExpandedStep(1); };
 
   // === 🔗 友链管理 ===
-  const uploadAvatarFile = async (file) => {
-    const res = await fetch('/api/admin/upload', {
-      method: 'POST',
-      headers: { 'content-type': file.type || 'application/octet-stream', 'x-file-name': encodeURIComponent(file.name || 'avatar.png') },
-      body: file,
-    });
-    const d = await res.json();
-    if (!d.success) throw new Error(d.error || '上传失败');
-    return d.url;
-  };
+  const uploadAvatarFile = (file) => uploadImageToLsky(file);
   const loadFriends = async () => {
     setFriendsLoading(true);
     try {

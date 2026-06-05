@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { uploadImageToLsky } from '@/src/lib/admin/lskyClientUpload'
 
 const btnSpinStyle = {
   width: '14px',
@@ -8,20 +9,6 @@ const btnSpinStyle = {
   borderRadius: '50%',
   animation: 'spin 0.8s linear infinite',
   display: 'inline-block',
-}
-
-async function uploadOne(file) {
-  const res = await fetch('/api/admin/upload', {
-    method: 'POST',
-    headers: {
-      'content-type': file.type || 'application/octet-stream',
-      'x-file-name': encodeURIComponent(file.name || 'image.png'),
-    },
-    body: file,
-  })
-  const d = await res.json()
-  if (!d.success) throw new Error(d.error || '上传失败')
-  return d.url
 }
 
 /**
@@ -72,7 +59,7 @@ export function GalleryManager({ postSlug, postTitle, postNotionId }) {
     try {
       const urls = []
       for (const file of files) {
-        urls.push(await uploadOne(file))
+        urls.push(await uploadImageToLsky(file))
       }
       setItems((prev) => [
         ...prev,
