@@ -77,7 +77,7 @@ export const GalleryPost = ({
               track="view"
             />
 
-            <p className={`mb-6 ${galleryPostPreviewLabelClass}`}>作品预览：</p>
+            <p className={`mb-6 ${galleryPostPreviewLabelClass}`}>预览</p>
 
             {post.excerpt ? (
               <p className="mb-8 font-gallery text-sm font-normal leading-relaxed tracking-wide text-neutral-500">

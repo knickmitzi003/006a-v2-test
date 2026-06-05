@@ -43,7 +43,7 @@ export const GALLERY_NAV_SECTIONS: GalleryNavSection[] = [
     title: '游客',
     items: [
       { label: '使用指南', href: guidePath, icon: 'guide' },
-      { label: '友链广场', href: morePath, icon: 'models' },
+      { label: '友链', href: morePath, icon: 'models' },
     ],
   },
 ]

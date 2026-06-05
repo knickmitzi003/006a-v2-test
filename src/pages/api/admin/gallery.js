@@ -11,7 +11,7 @@ export default async function handler(req, res) {
     return res.status(503).json({
       success: false,
       error:
-        'Supabase 未配置。请在 Vercel 设置 NEXT_PUBLIC_SUPABASE_URL 与 SUPABASE_SERVICE_ROLE_KEY',
+        '图库服务暂未启用，请联系管理员。',
     })
   }
 

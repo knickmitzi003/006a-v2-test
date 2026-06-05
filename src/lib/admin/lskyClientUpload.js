@@ -164,7 +164,7 @@ async function readResponseBody(res) {
 
       throw new Error(
 
-        '兰空 CSRF 校验失败。请确认走服务端代理上传，勿在浏览器直传 Bearer Token。'
+        '图片上传校验失败，请稍后重试。'
 
       )
 

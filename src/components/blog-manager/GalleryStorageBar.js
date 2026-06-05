@@ -75,7 +75,7 @@ export function GalleryStorageBar({ stats, loading, error }) {
           lineHeight: 1.6,
         }}
       >
-        图库容量统计未启用（需配置 Supabase 环境变量）。
+        图库容量统计暂未启用。
       </div>
     )
   }

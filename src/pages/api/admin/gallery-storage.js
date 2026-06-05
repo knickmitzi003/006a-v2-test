@@ -14,7 +14,7 @@ export default async function handler(req, res) {
       success: false,
       configured: false,
       error:
-        'Supabase 未配置。图库容量统计需要 NEXT_PUBLIC_SUPABASE_URL 与 SUPABASE_SERVICE_ROLE_KEY',
+        '图库容量统计暂未启用，请联系管理员。',
     })
   }
 

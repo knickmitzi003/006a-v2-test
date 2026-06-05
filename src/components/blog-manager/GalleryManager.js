@@ -266,10 +266,10 @@ export function GalleryManager({
           />
           <div style={{ pointerEvents: 'none', textAlign: 'center' }}>
             <div style={{ fontSize: '15px', color: '#fff', marginBottom: '6px' }}>
-              拖拽或点击 · 添加图库
+              拖拽或点击添加图片（Gallery图库）
             </div>
             <div style={{ fontSize: '12px', color: '#777' }}>
-              支持多选 · 发布/保存时自动压缩并上传
+              支持多张同时导入
             </div>
           </div>
         </label>
@@ -466,7 +466,7 @@ export function GalleryManager({
             fontSize: '13px',
           }}
         >
-          暂无图库图片
+          暂无图片
         </div>
       )}
 

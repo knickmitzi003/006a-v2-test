@@ -56,7 +56,7 @@ export default async function handler(req, res) {
   if (!token) {
     return res.status(500).json({
       success: false,
-      error: '服务端未配置 LSKY_TOKEN 环境变量',
+      error: '图片上传服务未配置，请联系管理员',
     })
   }
   // 容错：若变量里没带 "Bearer " 前缀，自动补上
@@ -110,16 +110,16 @@ export default async function handler(req, res) {
       // 兰空返回了非 JSON（通常是网关错误页 / token 失效跳转登录页）
       return res.status(502).json({
         success: false,
-        error: '兰空返回了非预期内容，请检查 LSKY_TOKEN 或站点地址',
+        error: '图片上传服务返回异常，请稍后重试',
         raw: text.slice(0, 300),
       })
     }
 
     // Lsky Pro 2.x: { status: true, message, data: { links: { url, ... } } }
     if (!lskyRes.ok || data.status === false) {
-      const lskyMsg = data.message || '兰空上传失败'
+      const lskyMsg = data.message || '上传失败'
       const sizeHint = /大小|size|limit|过大/i.test(lskyMsg)
-        ? `（兰空图床限制，请在兰空后台「策略/用户组」调大单张上传上限，当前代理允许 ${MAX_UPLOAD_MB}MB）`
+        ? `（单张上限 ${MAX_UPLOAD_MB}MB，请压缩后重试）`
         : ''
       return res.status(lskyRes.status || 502).json({
         success: false,
@@ -132,7 +132,7 @@ export default async function handler(req, res) {
     if (!url) {
       return res.status(502).json({
         success: false,
-        error: '兰空未返回图片 URL',
+        error: '上传失败：未获取到图片地址',
         data,
       })
     }

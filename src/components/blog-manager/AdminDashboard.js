@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Head from 'next/head'; // 🟢 引入 Head 组件控制浏览器标签
 import { GalleryManager } from './GalleryManager';
 import { GalleryStorageBar } from './GalleryStorageBar';
@@ -124,6 +124,11 @@ const GlobalStyle = () => (
     .fab-scroll { position: fixed; right: 30px; bottom: 150px; display: flex; flex-direction: column; gap: 10px; z-index: 99; }
     .fab-btn { width: 45px; height: 45px; background: greenyellow; color: #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); cursor: pointer; transition: 0.2s; }
     .fab-btn:hover { transform: scale(1.1); box-shadow: 0 6px 16px rgba(173, 255, 47, 0.4); }
+    .category-picker-dropdown { max-height: 220px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #555 #2a2a2e; }
+    .category-picker-dropdown::-webkit-scrollbar { width: 8px; }
+    .category-picker-dropdown::-webkit-scrollbar-track { background: #2a2a2e; border-radius: 4px; }
+    .category-picker-dropdown::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+    .category-picker-dropdown::-webkit-scrollbar-thumb:hover { background: #777; }
     .cover-modal-backdrop { position: fixed; inset: 0; z-index: 10001; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,0); backdrop-filter: blur(0px); pointer-events: none; transition: background 0.28s ease, backdrop-filter 0.28s ease; }
     .cover-modal-backdrop.is-visible { background: rgba(0,0,0,0.72); backdrop-filter: blur(6px); pointer-events: auto; }
     .cover-modal-backdrop.is-closing { background: rgba(0,0,0,0); backdrop-filter: blur(0px); pointer-events: none; }
@@ -316,14 +321,211 @@ const AdminPublishCalendar = ({ month, publishedDates, selectedDate, onMonthChan
   );
 };
 
+/** 分类搜索 + 可滚动下拉列表（fixed 定位，避免被 accordion overflow 裁剪） */
+const CategoryPicker = ({ value, categories, onChange }) => {
+  const [query, setQuery] = useState(value || '');
+  const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [menuRect, setMenuRect] = useState(null);
+  const wrapRef = useRef(null);
+  const triggerRef = useRef(null);
+
+  useEffect(() => {
+    setQuery(value || '');
+  }, [value]);
+
+  const updateMenuRect = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setMenuRect({
+      top: rect.bottom + 6,
+      left: rect.left,
+      width: rect.width,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      setMenuRect(null);
+      return;
+    }
+    updateMenuRect();
+    const onReposition = () => updateMenuRect();
+    window.addEventListener('scroll', onReposition, true);
+    window.addEventListener('resize', onReposition);
+    return () => {
+      window.removeEventListener('scroll', onReposition, true);
+      window.removeEventListener('resize', onReposition);
+    };
+  }, [open, updateMenuRect]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocDown = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocDown);
+    return () => document.removeEventListener('mousedown', onDocDown);
+  }, [open]);
+
+  const allCategories = useMemo(() => {
+    const list = [...(categories || [])];
+    if (value && !list.includes(value)) list.unshift(value);
+    return list.sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  }, [categories, value]);
+
+  const filteredCategories = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return allCategories;
+    return allCategories.filter((c) => c.toLowerCase().includes(q));
+  }, [allCategories, query]);
+
+  const listCategories = showAll ? allCategories : filteredCategories;
+
+  const pickCategory = (cat) => {
+    onChange(cat);
+    setQuery(cat);
+    setOpen(false);
+    setShowAll(false);
+  };
+
+  const toggleDropdown = () => {
+    setOpen((prev) => {
+      if (!prev) setShowAll(true);
+      return !prev;
+    });
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', marginBottom: '10px' }}>
+      <div ref={triggerRef} style={{ display: 'flex', alignItems: 'stretch' }}>
+        <input
+          className="glow-input"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setShowAll(false);
+            setOpen(true);
+            const trimmed = e.target.value.trim();
+            if (!trimmed) onChange('');
+            else if (allCategories.includes(trimmed)) onChange(trimmed);
+          }}
+          onFocus={() => { setOpen(true); setShowAll(false); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (listCategories.length === 1) pickCategory(listCategories[0]);
+              else {
+                const exact = listCategories.find((c) => c === query.trim());
+                if (exact) pickCategory(exact);
+              }
+            } else if (e.key === 'Escape') {
+              setOpen(false);
+              setShowAll(false);
+              setQuery(value || '');
+            }
+          }}
+          placeholder="输入关键词搜索分类"
+          style={{
+            flex: 1,
+            marginBottom: 0,
+            borderTopRightRadius: 0,
+            borderBottomRightRadius: 0,
+            borderRight: 'none',
+          }}
+        />
+        <button
+          type="button"
+          onClick={toggleDropdown}
+          title={open ? '收起分类列表' : '展开全部分类'}
+          style={{
+            width: '44px',
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: open ? 'rgba(173,255,47,0.12)' : '#18181c',
+            border: '1px solid #333',
+            borderLeft: '1px solid #444',
+            borderTopRightRadius: '10px',
+            borderBottomRightRadius: '10px',
+            color: open ? 'greenyellow' : '#aaa',
+            cursor: 'pointer',
+            transition: '0.2s',
+          }}
+        >
+          <span style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'flex' }}>
+            <Icons.ChevronDown />
+          </span>
+        </button>
+      </div>
+
+      {open && menuRect ? (
+        <div
+          className="category-picker-dropdown"
+          style={{
+            position: 'fixed',
+            top: menuRect.top,
+            left: menuRect.left,
+            width: menuRect.width,
+            zIndex: 1200,
+            background: '#2a2a2e',
+            border: '1px solid #555',
+            borderRadius: '10px',
+            boxShadow: '0 12px 28px rgba(0,0,0,0.55)',
+          }}
+        >
+          {listCategories.length > 0 ? (
+            listCategories.map((cat) => {
+              const active = cat === value;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => pickCategory(cat)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '10px 14px',
+                    border: 'none',
+                    borderBottom: '1px solid #3a3a3f',
+                    background: active ? 'rgba(173,255,47,0.12)' : 'transparent',
+                    color: active ? 'greenyellow' : '#eee',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  {cat}
+                </button>
+              );
+            })
+          ) : (
+            <div style={{ padding: '14px', fontSize: '12px', color: '#888', textAlign: 'center' }}>
+              无匹配分类
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const SAVE_PHASE_META = {
   media: {
     title: '正在上传图片块',
-    hint: '每张会先压缩到约几百 KB，再上传图床',
+    hint: '每张会先压缩到约几百 KB，再上传云端',
   },
   post: {
     title: '正在保存文章',
-    hint: '写入 Notion 页面与正文块…',
+    hint: '正在保存文章与正文内容…',
   },
   gallery: {
     title: '正在上传图库',
@@ -736,7 +938,7 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
   return (
     <div style={{marginTop:'30px'}}>
       <div style={{display:'flex', gap:'15px', marginBottom:'25px', justifyContent:'center', flexWrap:'wrap'}}>
-          <div className="neo-btn" onClick={()=>addBlock('h1')}>H1 标题</div>
+          <div className="neo-btn" onClick={()=>addBlock('h1')}>标题块</div>
           <div className="neo-btn" onClick={()=>addBlock('text')}>📝 内容块</div>
           <div className="neo-btn" onClick={()=>addBlock('image')}>🖼️ 图片块</div>
           <div className="neo-btn" onClick={()=>addBlock('quote')}>❝ 引用</div>
@@ -861,7 +1063,7 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
             <div className="block-del" onClick={()=>removeBlock(b.id)}><Icons.Trash /></div>
           </div>
         ))}
-        {blocks.length === 0 && <div style={{textAlign:'center', color:'#666', padding:'40px', border:'2px dashed #444', borderRadius:'12px'}}>👋 暂无内容，请点击上方按钮添加模块</div>}
+        {blocks.length === 0 && <div style={{textAlign:'center', color:'#666', padding:'40px', border:'2px dashed #444', borderRadius:'12px'}}>👋 正文暂无内容，请点击上方按钮添加模块，首个图片块将被作为本篇封面</div>}
       </div>
     </div>
   );
@@ -921,6 +1123,13 @@ const NotionView = ({ blocks }) => {
 // ==========================================
 // 5. 主组件
 // ==========================================
+const ANNOUNCEMENT_SLUG = 'announcement';
+const SIMPLE_CUSTOM_PAGE_SLUGS = new Set(['announcement', 'about', 'download']);
+
+function isSimpleCustomPage(slug) {
+  return SIMPLE_CUSTOM_PAGE_SLUGS.has(String(slug || '').trim());
+}
+
 export default function AdminDashboard() {
     // 🟢 1. 所有的 Hook (useState) 必须严格排在函数最顶部
 const [mounted, setMounted] = useState(false);
@@ -995,14 +1204,20 @@ const [mounted, setMounted] = useState(false);
   // 🟢 2. 增强表单校验逻辑：安全处理空值
   const isFormValid = (form?.type === 'Widget')
     ? (form?.title?.trim() || '') !== ''
-    : ((form?.title?.trim() || '') !== '' &&
-       (form?.category?.trim() || '') !== '' &&
-       (form?.date || '') !== '');
+    : isSimpleCustomPage(form?.slug) || form?.type === 'Page'
+      ? ((form?.title?.trim() || '') !== '' && (form?.date || '') !== '')
+      : ((form?.title?.trim() || '') !== '' &&
+         (form?.category?.trim() || '') !== '' &&
+         (form?.date || '') !== '');
 
   // 找出第一个未完成的必填项，用于灰色按钮被点击时的提示
   const getMissingFieldMsg = () => {
     if ((form?.title?.trim() || '') === '') return form?.type === 'Widget' ? '请填写组件标题' : '请填写文章标题';
     if (form?.type === 'Widget') return '';
+    if (isSimpleCustomPage(form?.slug) || form?.type === 'Page') {
+      if ((form?.date || '') === '') return '请选择发布日期';
+      return '';
+    }
     if ((form?.category?.trim() || '') === '') return '请填写文章分类';
     if ((form?.date || '') === '') return '请选择发布日期';
     return '';
@@ -1024,6 +1239,7 @@ const [mounted, setMounted] = useState(false);
     const isPostArticle =
       form?.type !== 'Widget' &&
       form?.type !== 'Page' &&
+      !isSimpleCustomPage(form?.slug) &&
       (form?.type === 'Post' || !form?.type);
     if (isPostArticle && !hasEditorImageBlock(editorBlocksRef.current || [])) {
       setCoverModalClosing(false);
@@ -1425,7 +1641,7 @@ const [mounted, setMounted] = useState(false);
     const pendingMediaCount = countPendingEditorMedia(blocksForSave);
     const pendingGalleryCount = countPendingGalleryItems(galleryItems);
     const willSyncGallery =
-      galleryDirty || pendingGalleryCount > 0;
+      !isSimpleCustomPage(form?.slug) && (galleryDirty || pendingGalleryCount > 0);
 
     if (pendingMediaCount > 0) {
       setSavePhase('media');
@@ -1546,7 +1762,7 @@ const [mounted, setMounted] = useState(false);
 
   const handleNavClick = (idx) => { setNavIdx(idx); const modes = ['folder','covered','text','gallery']; setViewMode(modes[idx]); setSelectedFolder(null); };
 
-  const ANNOUNCEMENT_SLUG = 'announcement';
+  const editingSimplePage = isSimpleCustomPage(form?.slug);
 
   const sortAdminPosts = (list) => {
     return [...list].sort((a, b) => {
@@ -1606,7 +1822,7 @@ const [mounted, setMounted] = useState(false);
         list = ann ? [ann, ...rest] : rest;
      }
      else if (activeTab === 'Widget') {
-        list = list.filter(p => p.type === 'Widget' && p.slug !== 'gallery-ad');
+        list = [];
      }
      else {
         list = list.filter(p => p.type === 'Post' && p.status !== 'Draft' && p.slug !== ANNOUNCEMENT_SLUG);
@@ -1621,6 +1837,7 @@ const [mounted, setMounted] = useState(false);
      return list;
   };
   const filtered = getFilteredPosts();
+  const siteInfoWidget = posts.find(p => p.type === 'Widget' && p.slug !== 'gallery-ad');
   const pinnedDividerIndex = activeTab === 'Post' ? filtered.findIndex(p => !p.pinned) : -1;
   const publishDatesSet = (() => {
     const s = new Set();
@@ -1833,9 +2050,19 @@ const [mounted, setMounted] = useState(false);
                   <div style={{ fontSize: '28px' }}>📢</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 'bold', fontSize: '17px', color: '#fff' }}>广告位编辑</div>
-                    <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>Gallery 主题内页底部横幅（链接预览风格）</div>
+                    <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>页底横幅banner</div>
                   </div>
                   <div style={{ color: '#f59e0b', fontSize: '13px', fontWeight: 'bold' }}>进入 →</div>
+                </div>
+              )}
+              {activeTab === 'Widget' && viewMode !== 'folder' && siteInfoWidget && (
+                <div onClick={() => handleEdit(siteInfoWidget)} className="card-item" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '18px 24px', background: 'linear-gradient(90deg,#3a3a3f,#2c2c30)', borderRadius: '12px', marginBottom: '12px', border: '1px solid greenyellow', cursor: 'pointer' }}>
+                  <div style={{ fontSize: '28px' }}>🧩</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 'bold', fontSize: '17px', color: '#fff' }}>网站信息编辑</div>
+                    <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>站点头像、标题与简介</div>
+                  </div>
+                  <div style={{ color: 'greenyellow', fontSize: '13px', fontWeight: 'bold' }}>进入 →</div>
                 </div>
               )}
               {viewMode === 'folder' && options.categories.map(cat => (
@@ -1854,7 +2081,7 @@ const [mounted, setMounted] = useState(false);
                         <div style={{ fontWeight: 'bold', fontSize: '17px', color: '#fff' }}>{p.title}</div>
                         <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <span style={{ border: `1px solid ${st.color}`, color: st.color, padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>{st.label}</span>
-                          <span>/{p.slug}{p.date ? ` · ${p.date}` : ''}</span>
+                          {p.date ? <span>{p.date}</span> : null}
                         </div>
                       </div>
                       {renderCardDrawer(p)}
@@ -1884,7 +2111,7 @@ const [mounted, setMounted] = useState(false);
           <div style={{background: '#424242', padding: 30, borderRadius: 20}}>
             <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'22px'}}>
               <div style={{fontSize:'20px', fontWeight:'bold', color:'#fff'}}>📢 广告位编辑</div>
-              <div style={{fontSize:'12px', color:'#888'}}>仅 Gallery 文章内页底部显示</div>
+              <div style={{fontSize:'12px', color:'#888'}}>页底广告位</div>
             </div>
 
             {galleryAdLoading ? (
@@ -1892,11 +2119,11 @@ const [mounted, setMounted] = useState(false);
             ) : (
               <>
                 <div style={{fontSize:'12px', color:'#aaa', marginBottom:'20px', lineHeight:1.8}}>
-                  横幅显示在 Gallery 文章内页底部（猜你喜欢下方）。链接必填；未配置时不显示。背景图优先使用下方上传的 Banner（写入 Notion cover 字段），未上传则构建时自动抓取链接预览图。
+                  横幅显示在 Gallery 文章内页底部（猜你喜欢下方）。链接必填；未配置时不显示。背景图优先使用下方上传的 Banner，未上传则自动抓取链接预览图。
                 </div>
                 <div style={{display:'flex', gap:'24px', alignItems:'flex-start', flexWrap:'wrap'}}>
                   <div>
-                    <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'8px'}}>Banner 背景图 <span style={{color:'#777', fontWeight:'normal'}}>(选填，写入 cover)</span></label>
+                    <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'8px'}}>Banner 背景图 <span style={{color:'#777', fontWeight:'normal'}}>(选填)</span></label>
                     <label className="img-drop" style={{width:'280px', height:'56px', minHeight:'56px', padding:0, borderRadius:'8px', overflow:'hidden', border:'1px dashed #555'}}
                       onDragOver={e=>{e.preventDefault(); e.stopPropagation();}}
                       onDrop={e=>{e.preventDefault(); e.stopPropagation(); uploadGalleryAdCover(e.dataTransfer.files[0]);}}>
@@ -1929,9 +2156,6 @@ const [mounted, setMounted] = useState(false);
                   {galleryAd.id ? (
                     <button onClick={clearGalleryAd} disabled={galleryAdSaving} style={{padding:'18px 24px', background:'transparent', color:'#ff7875', border:'1px solid #ff7875', borderRadius:'12px', fontWeight:'bold', fontSize:'14px', cursor:'pointer'}}>清空</button>
                   ) : null}
-                </div>
-                <div style={{marginTop:'20px', fontSize:'12px', color:'#777', lineHeight:1.7}}>
-                  💡 保存后需点击右上角「更新」重新部署，前台 Gallery 内页才会显示新横幅。
                 </div>
               </>
             )}
@@ -1996,15 +2220,11 @@ const [mounted, setMounted] = useState(false);
               ))}
               {!friendsLoading && friends.length === 0 && <div style={{textAlign:'center', color:'#666', padding:'40px', border:'2px dashed #444', borderRadius:'12px'}}>还没有友链，在上方添加吧</div>}
             </div>
-
-            <div style={{marginTop:'24px', fontSize:'12px', color:'#777', lineHeight:1.7}}>
-              💡 提示：友链保存到 Notion 后，前端 <span style={{color:'#aaa'}}>/friends</span> 页面是静态生成的，需点击右上角的「更新」按钮重新部署，新友链才会显示。
-            </div>
           </div>
         ) : form.type === 'Widget' ? (
           /* 🧩 组件编辑：精简界面，仅 标题 / 摘要 / 头像 */
           <div style={{background: '#424242', padding: 30, borderRadius: 20}}>
-            <div style={{fontSize:'20px', fontWeight:'bold', color:'#fff', marginBottom:'6px'}}>🧩 网站信息组件</div>
+            <div style={{fontSize:'20px', fontWeight:'bold', color:'#fff', marginBottom:'6px'}}>🧩 网站信息编辑</div>
             <div style={{fontSize:'12px', color:'#888', marginBottom:'26px', lineHeight:1.7}}>该组件用于展示站点头像、标题与简介。</div>
             <div style={{display:'flex', gap:'26px', alignItems:'flex-start', flexWrap:'wrap'}}>
               <div>
@@ -2031,8 +2251,14 @@ const [mounted, setMounted] = useState(false);
           /* 这里是之前的表单编辑代码... */
           <div style={{background: '#424242', padding: 30, borderRadius: 20}}>
             <StepAccordion step={1} title="基础信息" isOpen={expandedStep === 1} onToggle={()=>setExpandedStep(expandedStep===1?0:1)}>
-               <div style={{marginBottom:'15px'}}><label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'5px'}}>标题 <span style={{color: '#ff4d4f'}}>*</span></label><input className="glow-input" value={form.title} onChange={e=>setForm({...form, title:e.target.value})} placeholder="输入文章标题..." /></div>
-               <div style={{marginBottom:'15px'}}><label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'5px'}}>摘要</label><input className="glow-input" value={form.excerpt} onChange={e=>setForm({...form, excerpt:e.target.value})} placeholder="输入文章摘要..." /></div>
+               {!editingSimplePage ? (
+                 <div style={{marginBottom:'16px', fontSize:'12px', color:'#999', background:'#202024', borderRadius:'8px', padding:'12px 14px', lineHeight:1.7, border:'1px solid #333'}}>
+                   🖼️ <b style={{color:'greenyellow'}}>封面说明</b>：系统会将正文中的第一个图片块设为文章封面，请把用作封面的图片块放在最前。
+                 </div>
+               ) : null}
+               <div style={{marginBottom:'15px'}}><label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'5px'}}>标题 <span style={{color: '#ff4d4f'}}>*</span></label><input className="glow-input" value={form.title} onChange={e=>setForm({...form, title:e.target.value})} placeholder="输入标题" /></div>
+               <div style={{marginBottom:'15px'}}><label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'5px'}}>摘要</label><input className="glow-input" value={form.excerpt} onChange={e=>setForm({...form, excerpt:e.target.value})} placeholder="输入摘要" /></div>
+               {!editingSimplePage ? (
                <div style={{marginTop:'4px', paddingTop:'16px', borderTop:'1px solid #333'}}>
                  <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'6px'}}>下载信息 <span style={{color:'#777', fontWeight:'normal'}}>(Gallery主题专用)</span></label>
                  <p style={{fontSize:'11px', color:'#777', margin:'0 0 8px', lineHeight:1.5}}>Gallery 主题会展示下载按钮，对应此处填写内容。可写说明 + 链接，例如：下载链接：https://xxx.xxpan.com</p>
@@ -2040,29 +2266,21 @@ const [mounted, setMounted] = useState(false);
                  <div style={{marginTop:'12px'}}>
                    <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'6px'}}>资源包大小 <span style={{color:'#777', fontWeight:'normal'}}>(Gallery主题专用)</span></label>
                    <input className="glow-input" value={form.download_size || ''} onChange={e=>setForm({...form, download_size:e.target.value})} placeholder="例如：639 MB、1.2 GB" style={{fontSize:'13px'}} />
-                   <p style={{fontSize:'11px', color:'#777', margin:'6px 0 0', lineHeight:1.5}}>填写后显示在下载页标题栏右侧，留空则不显示 <code style={{color:'#aaa'}}>download_size</code>。</p>
-                 </div>
+                   <p style={{fontSize:'11px', color:'#777', margin:'6px 0 0', lineHeight:1.5}}>填写后显示在下载页标题栏右侧，留空则不显示。</p>
                </div>
-               <div style={{marginTop:'16px', fontSize:'12px', color:'#999', background:'#202024', borderRadius:'8px', padding:'12px 14px', lineHeight:1.7, border:'1px solid #333'}}>🖼️ <b style={{color:'greenyellow'}}>封面说明</b>：保存后系统会把<b style={{color:'#fff'}}>第一个图片块</b>的图床链接写入 Notion <b style={{color:'#fff'}}>cover</b> 并在内页嵌入；列表卡片也用该图。大图库请在 Step 4 批量添加（本地预览，保存后上传）。</div>
+               </div>
+               ) : null}
             </StepAccordion>
-            <StepAccordion step={2} title="分类与时间" isOpen={expandedStep === 2} onToggle={()=>setExpandedStep(expandedStep===2?0:2)}>
-               <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', alignItems:'start'}}>
+            <StepAccordion step={2} title={editingSimplePage ? '发布时间' : '分类与时间'} isOpen={expandedStep === 2} onToggle={()=>setExpandedStep(expandedStep===2?0:2)}>
+               <div style={{display:'grid', gridTemplateColumns: editingSimplePage ? '1fr' : '1fr 1fr', gap:'20px', alignItems:'start'}}>
+                 {!editingSimplePage ? (
                  <div>
                    <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'5px'}}>分类 <span style={{color: '#ff4d4f'}}>*</span></label>
-                   <select
-                     className="glow-input"
+                   <CategoryPicker
                      value={form.category || ''}
-                     onChange={e => setForm({ ...form, category: e.target.value })}
-                     style={{ marginBottom: '10px' }}
-                   >
-                     <option value="">请选择分类</option>
-                     {form.category && !options.categories.includes(form.category) ? (
-                       <option value={form.category}>{form.category}</option>
-                     ) : null}
-                     {options.categories.map(cat => (
-                       <option key={cat} value={cat}>{cat}</option>
-                     ))}
-                   </select>
+                     categories={options.categories}
+                     onChange={(cat) => setForm({ ...form, category: cat })}
+                   />
                    {showCatInput ? (
                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                        <input autoFocus className="glow-input" style={{ flex: 1, padding: '8px 10px', fontSize: '13px' }} value={catDraft}
@@ -2076,9 +2294,11 @@ const [mounted, setMounted] = useState(false);
                      <span onClick={()=>setShowCatInput(true)} style={{ display: 'inline-block', cursor:'pointer', border:'1px dashed #666', color:'greenyellow', padding:'6px 12px', borderRadius:'6px', fontSize:'13px' }}>＋ 创建分类</span>
                    )}
                  </div>
+                 ) : null}
                  <div><label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'5px'}}>发布日期 <span style={{color: '#ff4d4f'}}>*</span></label><input className="glow-input" type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})} /></div>
                </div>
             </StepAccordion>
+{!editingSimplePage ? (
 <StepAccordion step={3} title="标签" isOpen={expandedStep === 3} onToggle={()=>setExpandedStep(expandedStep===3?0:3)}>
                <div style={{marginBottom:'15px'}}>
                  <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'5px'}}>标签</label>
@@ -2112,8 +2332,10 @@ const [mounted, setMounted] = useState(false);
                  )}
                </div>
             </StepAccordion>
+) : null}
 
-            <StepAccordion step={4} title="图库（Gallery · Supabase）" isOpen={expandedStep === 4} onToggle={()=>setExpandedStep(expandedStep===4?0:4)}>
+            {!editingSimplePage ? (
+            <StepAccordion step={4} title="图库（Gallery主题专用）" isOpen={expandedStep === 4} onToggle={()=>setExpandedStep(expandedStep===4?0:4)}>
               <GalleryManager
                 postSlug={form.slug}
                 postTitle={form.title}
@@ -2123,6 +2345,7 @@ const [mounted, setMounted] = useState(false);
                 onGalleryMutated={() => setGalleryDirty(true)}
               />
             </StepAccordion>
+            ) : null}
             
             <BlockBuilder blocks={editorBlocks} setBlocks={setEditorBlocks} />
             

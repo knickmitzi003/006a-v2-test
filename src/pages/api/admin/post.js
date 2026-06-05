@@ -330,7 +330,7 @@ export default async function handler(req, res) {
       if (!pinKey) {
         return res.status(400).json({
           success: false,
-          error: '请先在 Notion 数据库添加 Checkbox 类型属性「pinned」',
+          error: '置顶功能暂不可用，请联系管理员。',
         });
       }
       if (pinned) {
