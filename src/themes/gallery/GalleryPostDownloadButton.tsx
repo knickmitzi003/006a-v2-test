@@ -1,35 +1,20 @@
-'use client'
-
-import { useState } from 'react'
-import { GalleryDownloadModal } from './GalleryDownloadModal'
+import Link from 'next/link'
+import { galleryPostDownloadHref } from '@/src/lib/gallery/galleryDownloadPaths'
 
 type GalleryPostDownloadButtonProps = {
-  postTitle: string
-  downloadContent: string
+  postSlug: string
 }
 
-/** 文章内页右上角「作品下载」，与首页卡片下载按钮共用弹窗逻辑 */
+/** 文章内页右上角「下载」→ 专用下载页 */
 export function GalleryPostDownloadButton({
-  postTitle,
-  downloadContent,
+  postSlug,
 }: GalleryPostDownloadButtonProps) {
-  const [open, setOpen] = useState(false)
-
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-md bg-black px-6 py-2.5 text-[15px] font-bold text-white transition-colors hover:bg-neutral-800 active:bg-neutral-900"
-      >
-        下载
-      </button>
-      <GalleryDownloadModal
-        open={open}
-        postTitle={postTitle}
-        content={downloadContent}
-        onClose={() => setOpen(false)}
-      />
-    </>
+    <Link
+      href={galleryPostDownloadHref(postSlug)}
+      className="inline-block rounded-md bg-black px-6 py-2.5 text-[15px] font-bold text-white transition-colors hover:bg-neutral-800 active:bg-neutral-900"
+    >
+      下载
+    </Link>
   )
 }

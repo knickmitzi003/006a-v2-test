@@ -27,7 +27,7 @@ import { getAllBlocks } from '../../lib/notion/getBlocks'
 import { capPostsForBuild } from '../../lib/blog/postLimits'
 import { getPosts } from '../../lib/notion/getBlogData'
 import { addSubTitle } from '../../lib/util'
-import { NextPageWithLayout, PartialPost, Post, SharedNavFooterStaticProps } from '../../types/blog'
+import { NextPageWithLayout, Page, PartialPost, Post, SharedNavFooterStaticProps } from '../../types/blog'
 import { ApiScope, BlockResponse } from '../../types/notion'
 
 export const getStaticPaths = async () => {
@@ -107,7 +107,8 @@ const PostPage: NextPage<{
   recommendations?: GalleryRecommendPost[]
   galleryAdBanner?: GalleryAdBanner | null
   activeTheme?: string
-}> = ({ post, blocks, navigation, recommendations = [], galleryAdBanner = null, activeTheme }) => {
+  navPages?: Page[]
+}> = ({ post, blocks, navigation, recommendations = [], galleryAdBanner = null, activeTheme, navPages = [] }) => {
   if (!post) return <Section404 />
 
   if (activeTheme === 'gallery') {
@@ -117,6 +118,7 @@ const PostPage: NextPage<{
         blocks={blocks}
         recommendations={recommendations}
         galleryAdBanner={galleryAdBanner}
+        navPages={navPages}
       />
     )
   }

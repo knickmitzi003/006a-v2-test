@@ -1,8 +1,7 @@
 import Link from 'next/link'
-import { useState } from 'react'
 import { Post, Tag } from '@/src/types/blog'
 import CONFIG from '@/blog.config'
-import { GalleryDownloadModal } from './GalleryDownloadModal'
+import { galleryPostDownloadHref } from '@/src/lib/gallery/galleryDownloadPaths'
 import { galleryCardTagClass, galleryCardTitleClass } from './galleryFonts'
 
 const { TAG } = CONFIG.DEFAULT_SPECIAL_PAGES
@@ -28,20 +27,12 @@ function DownloadIcon() {
 
 export const GalleryCard = ({ post }: { post: Post }) => {
   const cover = post.cover?.light?.src
-  const downloadValue = post.options?.download?.trim() ?? ''
   const postHref = `/post/${post.slug}`
+  const downloadHref = galleryPostDownloadHref(post.slug)
   const tags = post.tags?.filter((t) => t.name) ?? []
-  const [downloadOpen, setDownloadOpen] = useState(false)
-
-  const handleDownloadClick = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDownloadOpen(true)
-  }
 
   return (
-    <>
-      <article className="group mx-auto flex w-full max-w-[calc(100%-5px)] flex-col">
+    <article className="group mx-auto flex w-full max-w-[calc(100%-5px)] flex-col">
         <Link href={postHref} className="block overflow-hidden rounded-md">
           <div className="relative aspect-[10/13.35] bg-neutral-100">
             {cover ? (
@@ -66,14 +57,14 @@ export const GalleryCard = ({ post }: { post: Post }) => {
             >
               {post.title}
             </Link>
-            <button
-              type="button"
+            <Link
+              href={downloadHref}
               title="下载"
-              onClick={handleDownloadClick}
+              onClick={(e) => e.stopPropagation()}
               className="flex h-7 w-7 shrink-0 items-center justify-center text-neutral-900 transition-opacity hover:opacity-60"
             >
               <DownloadIcon />
-            </button>
+            </Link>
           </div>
 
           {tags.length > 0 ? (
@@ -98,13 +89,5 @@ export const GalleryCard = ({ post }: { post: Post }) => {
           ) : null}
         </div>
       </article>
-
-      <GalleryDownloadModal
-        open={downloadOpen}
-        postTitle={post.title}
-        content={downloadValue}
-        onClose={() => setDownloadOpen(false)}
-      />
-    </>
   )
 }
