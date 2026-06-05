@@ -19,6 +19,9 @@ import {
   revokePendingEditorMedia,
   blocksToMarkdown,
   resolveAutoCover,
+  findCoverImageBlock,
+  hasEditorImageBlock,
+  isVideoImageContent,
   serializeBlocksForSave,
 } from '@/src/lib/admin/contentMediaFlush';
 
@@ -341,6 +344,7 @@ const splitLockBody = (body) => {
 // ==========================================
 const BlockBuilder = ({ blocks, setBlocks }) => {
   const [movingId, setMovingId] = useState(null);
+  const coverImageBlockId = findCoverImageBlock(blocks)?.id ?? null;
 
   const scrollToBlock = (id) => {
     setTimeout(() => {
@@ -632,9 +636,23 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
                     <div className="img-uploading"><div className="img-spin"></div><div>上传中...</div></div>
                  ) : b.content ? (
                     <>
-                      {/\.(mp4|mov|webm|ogg|mkv)(\?|$)/i.test(b.content)
+                      {isVideoImageContent(b.content)
                         ? <video src={b.content} controls className="img-preview" />
                         : <img src={b.content} className="img-preview" alt="" />}
+                      {b.id === coverImageBlockId && !isVideoImageContent(b.content) ? (
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          color: '#000',
+                          background: 'greenyellow',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          marginTop: '8px',
+                          textAlign: 'center',
+                        }}>
+                          当前图片将被作为封面
+                        </div>
+                      ) : null}
                       {isImageBlockPending(b) ? (
                         <div style={{fontSize:'11px', color:'#f59e0b', marginTop:'6px', fontWeight:'bold'}}>待发布</div>
                       ) : (
@@ -797,6 +815,18 @@ const [mounted, setMounted] = useState(false);
   const attemptSave = () => {
     const msg = getMissingFieldMsg();
     if (msg) { alert('⚠️ ' + msg); return; }
+
+    const isPostArticle =
+      form?.type !== 'Widget' &&
+      form?.type !== 'Page' &&
+      (form?.type === 'Post' || !form?.type);
+    if (isPostArticle && !hasEditorImageBlock(editorBlocksRef.current || [])) {
+      const proceed = window.confirm(
+        '当前还未添加任何图片块，文章封面将采用默认封面。\n\n点击「确定」继续发布，点击「取消」返回继续编辑。'
+      );
+      if (!proceed) return;
+    }
+
     handleSave();
   };
 
@@ -1702,13 +1732,13 @@ const [mounted, setMounted] = useState(false);
                <div style={{marginBottom:'15px'}}><label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'5px'}}>标题 <span style={{color: '#ff4d4f'}}>*</span></label><input className="glow-input" value={form.title} onChange={e=>setForm({...form, title:e.target.value})} placeholder="输入文章标题..." /></div>
                <div style={{marginBottom:'15px'}}><label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'5px'}}>摘要</label><input className="glow-input" value={form.excerpt} onChange={e=>setForm({...form, excerpt:e.target.value})} placeholder="输入文章摘要..." /></div>
                <div style={{marginTop:'4px', paddingTop:'16px', borderTop:'1px solid #333'}}>
-                 <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'6px'}}>下载信息 <span style={{color:'#777', fontWeight:'normal'}}>(选填)</span></label>
-                 <p style={{fontSize:'11px', color:'#777', margin:'0 0 8px', lineHeight:1.5}}>Gallery 主题会展示下载按钮，对应此处填写内容。可写说明 + 链接，例如：欢迎下载-https://example.com</p>
-                 <input className="glow-input" value={form.download || ''} onChange={e=>setForm({...form, download:e.target.value})} placeholder="说明文字与链接，留空则前台提示「暂无下载」" style={{fontSize:'13px'}} />
+                 <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'6px'}}>下载信息 <span style={{color:'#777', fontWeight:'normal'}}>(Gallery主题专用)</span></label>
+                 <p style={{fontSize:'11px', color:'#777', margin:'0 0 8px', lineHeight:1.5}}>Gallery 主题会展示下载按钮，对应此处填写内容。可写说明 + 链接，例如：下载链接：https://xxx.xxpan.com</p>
+                 <input className="glow-input" value={form.download || ''} onChange={e=>setForm({...form, download:e.target.value})} placeholder="输入下载链接，留空则显示「暂无下载」" style={{fontSize:'13px'}} />
                  <div style={{marginTop:'12px'}}>
-                   <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'6px'}}>资源包大小 <span style={{color:'#777', fontWeight:'normal'}}>(选填)</span></label>
+                   <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'6px'}}>资源包大小 <span style={{color:'#777', fontWeight:'normal'}}>(Gallery主题专用)</span></label>
                    <input className="glow-input" value={form.download_size || ''} onChange={e=>setForm({...form, download_size:e.target.value})} placeholder="例如：639 MB、1.2 GB" style={{fontSize:'13px'}} />
-                   <p style={{fontSize:'11px', color:'#777', margin:'6px 0 0', lineHeight:1.5}}>填写后显示在下载页标题栏右侧；留空则不显示。需在 Notion 数据库添加 Rich text 属性 <code style={{color:'#aaa'}}>download_size</code>。</p>
+                   <p style={{fontSize:'11px', color:'#777', margin:'6px 0 0', lineHeight:1.5}}>填写后显示在下载页标题栏右侧，留空则不显示 <code style={{color:'#aaa'}}>download_size</code>。</p>
                  </div>
                </div>
                <div style={{marginTop:'16px', fontSize:'12px', color:'#999', background:'#202024', borderRadius:'8px', padding:'12px 14px', lineHeight:1.7, border:'1px solid #333'}}>🖼️ <b style={{color:'greenyellow'}}>封面说明</b>：保存后系统会把<b style={{color:'#fff'}}>第一个图片块</b>的图床链接写入 Notion <b style={{color:'#fff'}}>cover</b> 并在内页嵌入；列表卡片也用该图。大图库请在 Step 4 批量添加（本地预览，保存后上传）。</div>
