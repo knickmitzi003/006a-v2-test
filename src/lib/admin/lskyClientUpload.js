@@ -4,13 +4,13 @@ const PROXY_SAFE_BYTES = 3.5 * 1024 * 1024
 
 
 
-/** 图库 / 图片块：长边上限与目标体积 */
+/** 图库 / 图片块：长边上限与目标体积（典型输出约 300–500KB JPEG） */
 
-const GALLERY_MAX_DIM = 2048
+const GALLERY_MAX_DIM = 1920
 
-const GALLERY_TARGET_BYTES = 1.2 * 1024 * 1024
+const GALLERY_TARGET_BYTES = 480 * 1024
 
-const GALLERY_SKIP_BYTES = 380 * 1024
+const GALLERY_SKIP_BYTES = 260 * 1024
 
 
 
@@ -274,7 +274,7 @@ async function compressImageFile(
 
 
 
-  let quality = 0.88
+  let quality = file.size > maxBytes * 3 ? 0.58 : file.size > maxBytes * 1.5 ? 0.72 : 0.85
 
   let blob = null
 
@@ -386,7 +386,7 @@ export async function compressImageForGallery(file) {
 
     maxDim: GALLERY_MAX_DIM,
 
-    minQuality: 0.5,
+    minQuality: 0.38,
 
   })
 

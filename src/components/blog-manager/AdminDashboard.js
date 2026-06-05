@@ -62,8 +62,13 @@ const GlobalStyle = () => (
     .tag-chip { background: #333; padding: 4px 10px; border-radius: 4px; font-size: 11px; color: #bbb; margin: 0 5px 5px 0; cursor: pointer; position: relative; }
     .tag-del { position: absolute; top: -5px; right: -5px; background: #ff4d4f; color: white; border-radius: 50%; width: 14px; height: 14px; display: none; align-items: center; justify-content: center; font-size: 10px; }
     .tag-chip:hover .tag-del { display: flex; }
-    .loader-overlay { position: fixed; inset: 0; background: rgba(20, 20, 23, 0.95); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px); flex-direction: column; }
-    .loader-text { margin-top: 20px; font-family: monospace; color: #666; font-size: 12px; letter-spacing: 2px; }
+    .loader-overlay { position: fixed; inset: 0; background: rgba(20, 20, 23, 0.95); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px); flex-direction: column; padding: 24px; box-sizing: border-box; }
+    .loader-text { margin-top: 20px; font-family: monospace; color: #888; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; }
+    .loader-phase { margin-top: 28px; font-size: 16px; font-weight: 600; color: #fff; text-align: center; letter-spacing: 0.5px; }
+    .loader-detail { margin-top: 10px; font-size: 13px; color: greenyellow; text-align: center; min-height: 20px; }
+    .loader-hint { margin-top: 8px; font-size: 11px; color: #666; text-align: center; max-width: 320px; line-height: 1.6; }
+    .loader-progress-track { margin-top: 18px; width: min(320px, 80vw); height: 6px; background: #2a2a2e; border-radius: 999px; overflow: hidden; border: 1px solid #333; }
+    .loader-progress-bar { height: 100%; background: linear-gradient(90deg, #adff2f, #84cc16); border-radius: 999px; transition: width 0.35s ease; }
     .loader { display: flex; margin: 0.25em 0; }
     .dash { animation: dashArray 2s ease-in-out infinite, dashOffset 2s linear infinite; }
     @keyframes dashArray { 0% { stroke-dasharray: 0 1 359 0; } 50% { stroke-dasharray: 0 359 1 0; } 100% { stroke-dasharray: 359 1 0 0; } }
@@ -168,18 +173,66 @@ const SlidingNav = ({ activeIdx, onSelect }) => {
   );
 };
 
-const FullScreenLoader = () => (
-  <div className="loader-overlay">
-    <div className="loader">
-      <svg viewBox="0 0 200 60" width="200" height="60">
-        <path className="dash" fill="none" stroke="greenyellow" strokeWidth="3" d="M20,50 L20,10 L50,10 C65,10 65,30 50,30 L20,30" />
-        <path className="dash" fill="none" stroke="greenyellow" strokeWidth="3" d="M80,50 L80,10 L110,10 C125,10 125,30 110,30 L80,30 M100,30 L120,50" />
-        <path className="dash" fill="none" stroke="greenyellow" strokeWidth="3" d="M140,30 A20,20 0 1,0 180,30 A20,20 0 1,0 140,30" />
-      </svg>
+const SAVE_PHASE_META = {
+  media: {
+    title: '正在压缩并上传正文图片',
+    hint: '每张会先压缩到约几百 KB，再上传图床',
+  },
+  post: {
+    title: '正在保存文章',
+    hint: '写入 Notion 页面与正文块…',
+  },
+  gallery: {
+    title: '正在压缩并上传图库',
+    hint: '批量处理中，请稍候',
+  },
+};
+
+function getGalleryLoaderHint(phase, progress) {
+  if (phase !== 'gallery') return SAVE_PHASE_META[phase]?.hint || '';
+  if (progress?.total > 0) return SAVE_PHASE_META.gallery.hint;
+  return '正在同步图库到数据库…';
+}
+
+const FullScreenLoader = ({ phase, progress }) => {
+  const meta = SAVE_PHASE_META[phase];
+  const title =
+    phase === 'gallery' && !(progress?.total > 0)
+      ? '正在同步图库'
+      : meta?.title || '加载中…';
+  const hint = getGalleryLoaderHint(phase, progress);
+  const hasProgress = progress && progress.total > 0;
+  const pct = hasProgress
+    ? Math.min(100, Math.round((progress.done / progress.total) * 100))
+    : 0;
+
+  return (
+    <div className="loader-overlay">
+      <div className="loader">
+        <svg viewBox="0 0 200 60" width="200" height="60">
+          <path className="dash" fill="none" stroke="greenyellow" strokeWidth="3" d="M20,50 L20,10 L50,10 C65,10 65,30 50,30 L20,30" />
+          <path className="dash" fill="none" stroke="greenyellow" strokeWidth="3" d="M80,50 L80,10 L110,10 C125,10 125,30 110,30 L80,30 M100,30 L120,50" />
+          <path className="dash" fill="none" stroke="greenyellow" strokeWidth="3" d="M140,30 A20,20 0 1,0 180,30 A20,20 0 1,0 140,30" />
+        </svg>
+      </div>
+      <div className="loader-text">SYSTEM PROCESSING</div>
+      <div className="loader-phase">{title}</div>
+      {hasProgress ? (
+        <div className="loader-detail">
+          已完成 {progress.done} / {progress.total} 张（{pct}%）
+        </div>
+      ) : (
+        <div className="loader-detail">{phase === 'post' ? '请稍候…' : ''}</div>
+      )}
+      {hasProgress ? (
+        <div className="loader-progress-track">
+          <div className="loader-progress-bar" style={{ width: `${pct}%` }} />
+        </div>
+      ) : null}
+      {hint ? <div className="loader-hint">{hint}</div> : null}
     </div>
-    <div className="loader-text">SYSTEM PROCESSING</div>
-  </div>
-);
+  );
+};
 
 // 工具函数：清洗 URL
 // 🟢 修复版：AdminDashboard 顶部的洗链逻辑
@@ -701,8 +754,8 @@ const [mounted, setMounted] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [galleryItems, setGalleryItems] = useState([]);
   const [galleryDirty, setGalleryDirty] = useState(false);
-  const [savePhase, setSavePhase] = useState(''); // '' | 'post' | 'gallery'
-  const [galleryUploadProgress, setGalleryUploadProgress] = useState(null);
+  const [savePhase, setSavePhase] = useState(''); // '' | 'media' | 'post' | 'gallery'
+  const [saveProgress, setSaveProgress] = useState(null); // { done, total }
 
   const resetGalleryItems = () => {
     setGalleryItems((prev) => {
@@ -1104,27 +1157,40 @@ const [mounted, setMounted] = useState(false);
     }
 
     setLoading(true);
-    setGalleryUploadProgress(null);
+    setSaveProgress(null);
 
     let blocksForSave = editorBlocksRef.current;
     const pendingMediaCount = countPendingEditorMedia(blocksForSave);
+    const pendingGalleryCount = countPendingGalleryItems(galleryItems);
+    const willSyncGallery =
+      galleryDirty || pendingGalleryCount > 0;
+
     if (pendingMediaCount > 0) {
       setSavePhase('media');
+      setSaveProgress({ done: 0, total: pendingMediaCount });
+    } else {
+      setSavePhase('post');
+      setSaveProgress(null);
+    }
+
+    if (pendingMediaCount > 0) {
       try {
         blocksForSave = await flushEditorBlocksMedia(blocksForSave, {
-          onProgress: ({ done, total }) => setGalleryUploadProgress({ done, total }),
+          onProgress: ({ done, total }) => setSaveProgress({ done, total }),
         });
         setEditorBlocks(blocksForSave);
       } catch (e) {
         alert(`正文图片上传失败：\n\n${e.message}\n\n请重试保存。`);
         setLoading(false);
         setSavePhase('');
-        setGalleryUploadProgress(null);
+        setSaveProgress(null);
         return;
       }
     }
 
     setSavePhase('post');
+    setSaveProgress(null);
+
     const fullContent = blocksToMarkdown(blocksForSave);
 
     const blocksData = serializeBlocksForSave(blocksForSave);
@@ -1153,17 +1219,20 @@ const [mounted, setMounted] = useState(false);
         const newId = d.id || currentId;
         if (newId && newId !== currentId) setCurrentId(newId);
 
-        const shouldSyncGallery =
-          galleryDirty || countPendingGalleryItems(galleryItems) > 0;
-        if (shouldSyncGallery) {
+        if (willSyncGallery) {
           setSavePhase('gallery');
+          if (pendingGalleryCount > 0) {
+            setSaveProgress({ done: 0, total: pendingGalleryCount });
+          } else {
+            setSaveProgress(null);
+          }
           try {
             const updated = await flushGalleryUploads({
               slug: form.slug,
               postTitle: form.title,
               postNotionId: newId,
               items: galleryItems,
-              onProgress: ({ done, total }) => setGalleryUploadProgress({ done, total }),
+              onProgress: ({ done, total }) => setSaveProgress({ done, total }),
             });
             setGalleryItems(updated);
             setGalleryDirty(false);
@@ -1183,7 +1252,7 @@ const [mounted, setMounted] = useState(false);
     } finally {
       setLoading(false);
       setSavePhase('');
-      setGalleryUploadProgress(null);
+      setSaveProgress(null);
     }
   };
 
@@ -1302,7 +1371,7 @@ const [mounted, setMounted] = useState(false);
         <link rel="shortcut icon" href="/favicon-32x32.png" />
       </Head>
       <GlobalStyle />
-      {loading && <FullScreenLoader />}
+      {loading && <FullScreenLoader phase={savePhase} progress={saveProgress} />}
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
@@ -1670,14 +1739,14 @@ const [mounted, setMounted] = useState(false);
 
             <button onClick={attemptSave} disabled={loading} title={isFormValid ? '' : (getMissingFieldMsg() || '')} style={{width:'100%', padding:'20px', background:isFormValid && !loading?'#fff':'#222', color:isFormValid && !loading?'#000':'#666', border:'none', borderRadius:'12px', fontWeight:'bold', fontSize:'16px', marginTop:'40px', cursor: loading ? 'wait' : 'pointer', transition:'0.3s'}}>
               {loading && savePhase === 'media'
-                ? galleryUploadProgress
-                  ? `上传正文图片 ${galleryUploadProgress.done}/${galleryUploadProgress.total}…`
+                ? saveProgress
+                  ? `上传正文图片 ${saveProgress.done}/${saveProgress.total}…`
                   : '准备上传正文图片…'
                 : loading && savePhase === 'post'
                 ? '保存文章中…'
                 : loading && savePhase === 'gallery'
-                  ? galleryUploadProgress
-                    ? `上传图库 ${galleryUploadProgress.done}/${galleryUploadProgress.total}…`
+                  ? saveProgress?.total
+                    ? `上传图库 ${saveProgress.done}/${saveProgress.total}…`
                     : '同步图库…'
                   : currentId
                     ? '保存修改'
