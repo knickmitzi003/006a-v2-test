@@ -6,6 +6,7 @@ import { GalleryAdBanner as GalleryAdBannerData } from '@/src/lib/gallery/loadGa
 import { GalleryRecommendPost } from '@/src/lib/gallery/galleryRecommendations'
 import { GalleryAdBanner } from './GalleryAdBanner'
 import { GalleryBreadcrumb } from './GalleryBreadcrumb'
+import { GalleryPopularSidebar } from './GalleryPopularSidebar'
 import { GalleryPostDownloadButton } from './GalleryPostDownloadButton'
 import { GalleryPostContent } from './GalleryPostContent'
 import { GalleryPostRecommendations } from './GalleryPostRecommendations'
@@ -54,32 +55,41 @@ export const GalleryPost = ({
         ]}
       />
       <main className="flex flex-1 flex-col bg-white px-6 py-6 pb-8 lg:px-10">
-        <article className="mx-auto w-full max-w-[1120px]">
-          <div className="mb-3 flex items-start justify-between gap-6">
-            <h1 className={`min-w-0 flex-1 ${galleryPostTitleClass}`}>
-              {post.title}
-            </h1>
-            <div className="shrink-0 pt-0.5">
-              <GalleryPostDownloadButton postSlug={post.slug} />
+        <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-0 xl:flex-row xl:items-start xl:gap-10">
+          <article className="min-w-0 flex-1">
+            <div className="mb-3 flex items-start justify-between gap-6">
+              <h1 className={`min-w-0 flex-1 ${galleryPostTitleClass}`}>
+                {post.title}
+              </h1>
+              <div className="shrink-0 pt-0.5">
+                <GalleryPostDownloadButton postSlug={post.slug} />
+              </div>
             </div>
-          </div>
 
-          <p className={`mb-6 ${galleryPostPreviewLabelClass}`}>作品预览：</p>
+            <p className={`mb-6 ${galleryPostPreviewLabelClass}`}>预览</p>
 
-          {post.excerpt ? (
-            <p className="mb-8 font-gallery text-sm font-normal leading-relaxed tracking-wide text-neutral-500">
-              {post.excerpt}
-            </p>
-          ) : (
-            <div className="mb-8" />
-          )}
+            {post.excerpt ? (
+              <p className="mb-8 font-gallery text-sm font-normal leading-relaxed tracking-wide text-neutral-500">
+                {post.excerpt}
+              </p>
+            ) : (
+              <div className="mb-8" />
+            )}
 
-          <GalleryPostContent postSlug={post.slug} blocks={blocks} />
+            <GalleryPostContent postSlug={post.slug} blocks={blocks} />
 
-          <GalleryPostRecommendations posts={recommendations} />
+            <div className="xl:hidden">
+              <GalleryPostRecommendations posts={recommendations} />
+            </div>
 
-          {galleryAdBanner ? <GalleryAdBanner banner={galleryAdBanner} /> : null}
-        </article>
+            {galleryAdBanner ? <GalleryAdBanner banner={galleryAdBanner} /> : null}
+          </article>
+
+          <GalleryPopularSidebar
+            posts={recommendations}
+            className="hidden xl:block"
+          />
+        </div>
       </main>
     </>
   )

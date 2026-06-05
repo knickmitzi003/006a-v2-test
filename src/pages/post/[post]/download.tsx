@@ -12,6 +12,10 @@ import { getPosts } from '@/src/lib/notion/getBlogData'
 import { addSubTitle } from '@/src/lib/util'
 import { GalleryPostDownloadPage } from '@/src/themes/gallery/GalleryPostDownloadPage'
 import {
+  buildGalleryRecommendations,
+  GalleryRecommendPost,
+} from '@/src/lib/gallery/galleryRecommendations'
+import {
   GalleryAdBanner,
   loadGalleryAdBanner,
 } from '@/src/lib/gallery/loadGalleryAdBanner'
@@ -63,6 +67,8 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
 
       if (!post) return { notFound: true }
 
+      const recommendations = buildGalleryRecommendations(post, allFormattedPosts)
+
       addSubTitle(
         sharedPageStaticProps.props,
         '',
@@ -90,6 +96,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
           ...sharedPageStaticProps.props,
           post,
           downloadInstructionBlocks,
+          recommendations,
           galleryAdBanner,
         })
       )
@@ -105,12 +112,14 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
 const PostDownloadPage: NextPage<{
   post: Post | null
   downloadInstructionBlocks: BlockResponse[]
+  recommendations?: GalleryRecommendPost[]
   activeTheme?: string
   navPages?: Page[]
   galleryAdBanner?: GalleryAdBanner | null
 }> = ({
   post,
   downloadInstructionBlocks,
+  recommendations = [],
   activeTheme,
   navPages = [],
   galleryAdBanner = null,
@@ -122,6 +131,7 @@ const PostDownloadPage: NextPage<{
       <GalleryPostDownloadPage
         post={post}
         downloadInstructionBlocks={downloadInstructionBlocks}
+        recommendations={recommendations}
         navPages={navPages}
         galleryAdBanner={galleryAdBanner}
       />

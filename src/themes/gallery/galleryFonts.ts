@@ -30,6 +30,10 @@ export const galleryPostPreviewLabelClass =
 export const galleryPostTitleClass =
   'font-gallery text-2xl font-semibold leading-tight tracking-[0.01em] text-neutral-900 antialiased md:text-[1.75rem]'
 
+/** Epic 风格：下载页 / 内页顶栏小标题（常规字重、非大字） */
+export const galleryEpicBarTitleClass =
+  'font-gallery text-[15px] font-normal leading-snug tracking-[0.01em] text-neutral-900 antialiased'
+
 /** 文章页标签链接 */
 export const galleryPostTagLinkClass = `${galleryInlineLinkClass} text-[12px]`
 

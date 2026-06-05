@@ -123,6 +123,23 @@ const GlobalStyle = () => (
     .fab-scroll { position: fixed; right: 30px; bottom: 150px; display: flex; flex-direction: column; gap: 10px; z-index: 99; }
     .fab-btn { width: 45px; height: 45px; background: greenyellow; color: #000; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); cursor: pointer; transition: 0.2s; }
     .fab-btn:hover { transform: scale(1.1); box-shadow: 0 6px 16px rgba(173, 255, 47, 0.4); }
+    .cover-modal-backdrop { position: fixed; inset: 0; z-index: 10001; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,0); backdrop-filter: blur(0px); pointer-events: none; transition: background 0.28s ease, backdrop-filter 0.28s ease; }
+    .cover-modal-backdrop.is-visible { background: rgba(0,0,0,0.72); backdrop-filter: blur(6px); pointer-events: auto; }
+    .cover-modal-backdrop.is-closing { background: rgba(0,0,0,0); backdrop-filter: blur(0px); pointer-events: none; }
+    .cover-modal-panel { width: min(420px, 92vw); background: #202024; border: 1px solid #444; border-radius: 18px; padding: 28px 26px 22px; box-shadow: 0 24px 60px rgba(0,0,0,0.55); transform: scale(0.88) translateY(16px); opacity: 0; transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.26s ease; }
+    .cover-modal-backdrop.is-visible .cover-modal-panel { transform: scale(1) translateY(0); opacity: 1; }
+    .cover-modal-backdrop.is-closing .cover-modal-panel { transform: scale(0.94) translateY(8px); opacity: 0; transition: transform 0.22s ease, opacity 0.2s ease; }
+    .cover-modal-icon { width: 48px; height: 48px; border-radius: 14px; background: rgba(173,255,47,0.12); border: 1px solid rgba(173,255,47,0.35); display: flex; align-items: center; justify-content: center; font-size: 22px; margin-bottom: 16px; }
+    .cover-modal-title { font-size: 17px; font-weight: 700; color: #fff; margin: 0 0 10px; letter-spacing: 0.2px; }
+    .cover-modal-desc { font-size: 13px; line-height: 1.75; color: #aaa; margin: 0 0 22px; }
+    .cover-modal-actions { display: flex; gap: 10px; }
+    .cover-modal-btn { flex: 1; padding: 13px 16px; border-radius: 11px; font-size: 14px; font-weight: 700; cursor: pointer; border: 1px solid transparent; transition: transform 0.16s cubic-bezier(0.34, 1.3, 0.64, 1), background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease; }
+    .cover-modal-btn:active { transform: scale(0.96); }
+    .cover-modal-btn-secondary { background: #2a2a2e; border-color: #444; color: #ccc; }
+    .cover-modal-btn-secondary:hover { background: #333; border-color: #666; color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
+    .cover-modal-btn-primary { background: greenyellow; color: #000; box-shadow: 0 0 0 0 rgba(173,255,47,0); }
+    .cover-modal-btn-primary:hover { box-shadow: 0 6px 20px rgba(173,255,47,0.35); transform: translateY(-1px); }
+    .cover-modal-btn-primary:active { transform: scale(0.96) translateY(0); box-shadow: 0 2px 8px rgba(173,255,47,0.2); }
     .btn-disabled { opacity: 0.5; cursor: not-allowed; }
     .img-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 160px; border: 2px dashed #555; border-radius: 10px; background: #202024; cursor: pointer; transition: 0.2s; padding: 18px; text-align: center; color: #888; }
     .img-drop:hover { border-color: greenyellow; color: greenyellow; background: #1f261b; }
@@ -234,6 +251,55 @@ const FullScreenLoader = ({ phase, progress }) => {
         </div>
       ) : null}
       {hint ? <div className="loader-hint">{hint}</div> : null}
+    </div>
+  );
+};
+
+/** 无图片块时的封面确认弹窗（替代浏览器 confirm） */
+const CoverMissingModal = ({ open, closing, onConfirm, onCancel }) => {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (open && !closing) {
+      setVisible(false);
+      const id = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setVisible(true));
+      });
+      return () => cancelAnimationFrame(id);
+    }
+    if (!open || closing) setVisible(false);
+  }, [open, closing]);
+
+  if (!open && !closing) return null;
+
+  return (
+    <div
+      className={`cover-modal-backdrop ${visible && !closing ? 'is-visible' : ''} ${closing ? 'is-closing' : ''}`}
+      onClick={onCancel}
+      role="presentation"
+    >
+      <div
+        className="cover-modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cover-modal-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="cover-modal-icon" aria-hidden>🖼️</div>
+        <h3 id="cover-modal-title" className="cover-modal-title">尚未添加图片块</h3>
+        <p className="cover-modal-desc">
+          当前文章没有任何图片块，发布后将使用<strong style={{ color: '#ddd' }}>默认封面</strong>。
+          你可以继续发布，或返回编辑添加图片块作为封面。
+        </p>
+        <div className="cover-modal-actions">
+          <button type="button" className="cover-modal-btn cover-modal-btn-secondary" onClick={onCancel}>
+            继续编辑
+          </button>
+          <button type="button" className="cover-modal-btn cover-modal-btn-primary" onClick={onConfirm}>
+            确认发布
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -778,6 +844,9 @@ const [mounted, setMounted] = useState(false);
   const [galleryStorageStats, setGalleryStorageStats] = useState(null);
   const [galleryStorageLoading, setGalleryStorageLoading] = useState(false);
   const [galleryStorageError, setGalleryStorageError] = useState('');
+  const [coverModalOpen, setCoverModalOpen] = useState(false);
+  const [coverModalClosing, setCoverModalClosing] = useState(false);
+  const coverModalTimerRef = useRef(null);
 
   const resetGalleryItems = () => {
     setGalleryItems((prev) => {
@@ -812,6 +881,15 @@ const [mounted, setMounted] = useState(false);
     return '';
   };
   // 统一的"尝试保存"：无效时弹出具体缺失项提示，有效时才真正保存
+  const closeCoverModal = () => {
+    if (coverModalTimerRef.current) clearTimeout(coverModalTimerRef.current);
+    setCoverModalClosing(true);
+    coverModalTimerRef.current = setTimeout(() => {
+      setCoverModalOpen(false);
+      setCoverModalClosing(false);
+    }, 240);
+  };
+
   const attemptSave = () => {
     const msg = getMissingFieldMsg();
     if (msg) { alert('⚠️ ' + msg); return; }
@@ -821,13 +899,17 @@ const [mounted, setMounted] = useState(false);
       form?.type !== 'Page' &&
       (form?.type === 'Post' || !form?.type);
     if (isPostArticle && !hasEditorImageBlock(editorBlocksRef.current || [])) {
-      const proceed = window.confirm(
-        '当前还未添加任何图片块，文章封面将采用默认封面。\n\n点击「确定」继续发布，点击「取消」返回继续编辑。'
-      );
-      if (!proceed) return;
+      setCoverModalClosing(false);
+      setCoverModalOpen(true);
+      return;
     }
 
     handleSave();
+  };
+
+  const confirmCoverAndSave = () => {
+    closeCoverModal();
+    setTimeout(() => handleSave(), 260);
   };
 
   // 🟢 3. 主题状态计算
@@ -1426,6 +1508,12 @@ const [mounted, setMounted] = useState(false);
       </Head>
       <GlobalStyle />
       {loading && <FullScreenLoader phase={savePhase} progress={saveProgress} />}
+      <CoverMissingModal
+        open={coverModalOpen}
+        closing={coverModalClosing}
+        onConfirm={confirmCoverAndSave}
+        onCancel={closeCoverModal}
+      />
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
