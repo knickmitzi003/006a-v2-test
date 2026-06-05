@@ -1,7 +1,5 @@
 import { Page, Title } from '@/src/types/blog'
 import { ReactNode } from 'react'
-import { GalleryAdBanner as GalleryAdBannerData } from '@/src/lib/gallery/loadGalleryAdBanner'
-import { GalleryAdBanner } from './GalleryAdBanner'
 import { GALLERY_LOGO_SRC, GALLERY_SIDEBAR_WIDTH } from './galleryConstants'
 import { GalleryFontLinks } from './GalleryFontLinks'
 import { galleryShellClass } from './galleryFonts'
@@ -15,14 +13,12 @@ type GalleryShellProps = {
   children: ReactNode
   /** 顶栏居中标题，传 false 可隐藏 */
   headerTitle?: string | false
-  galleryAdBanner?: GalleryAdBannerData | null
 }
 
 export const GalleryShell = ({
   siteTitle,
   children,
   headerTitle,
-  galleryAdBanner = null,
 }: GalleryShellProps) => {
   const siteName = siteTitle?.text || 'PRO BLOG'
   const showHeader = headerTitle !== false
@@ -54,10 +50,7 @@ export const GalleryShell = ({
             </h1>
           </header>
         ) : null}
-        <div className="flex min-h-0 flex-1 flex-col bg-white">
-          <div className="flex-1">{children}</div>
-          {galleryAdBanner ? <GalleryAdBanner banner={galleryAdBanner} /> : null}
-        </div>
+        <div className="flex min-h-0 flex-1 flex-col bg-white">{children}</div>
       </div>
     </div>
   )

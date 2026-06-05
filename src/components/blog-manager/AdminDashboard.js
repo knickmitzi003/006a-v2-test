@@ -1301,7 +1301,7 @@ const [mounted, setMounted] = useState(false);
           <div style={{background: '#424242', padding: 30, borderRadius: 20}}>
             <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'22px'}}>
               <div style={{fontSize:'20px', fontWeight:'bold', color:'#fff'}}>📢 广告位编辑</div>
-              <div style={{fontSize:'12px', color:'#888'}}>Gallery 主题全站底部细条显示</div>
+              <div style={{fontSize:'12px', color:'#888'}}>仅 Gallery 文章内页底部显示</div>
             </div>
 
             {galleryAdLoading ? (
@@ -1309,7 +1309,7 @@ const [mounted, setMounted] = useState(false);
             ) : (
               <>
                 <div style={{fontSize:'12px', color:'#aaa', marginBottom:'20px', lineHeight:1.8}}>
-                  横幅显示在 Gallery 所有页面主内容区最底部（细条，参考 Gallery Epic）。链接必填；未配置时全站不留空白。背景图优先使用下方上传的 Banner（写入 Notion cover 字段），未上传则构建时自动抓取链接预览图。
+                  横幅显示在 Gallery 文章内页底部（猜你喜欢下方）。链接必填；未配置时不显示。背景图优先使用下方上传的 Banner（写入 Notion cover 字段），未上传则构建时自动抓取链接预览图。
                 </div>
                 <div style={{display:'flex', gap:'24px', alignItems:'flex-start', flexWrap:'wrap'}}>
                   <div>
@@ -1348,7 +1348,7 @@ const [mounted, setMounted] = useState(false);
                   ) : null}
                 </div>
                 <div style={{marginTop:'20px', fontSize:'12px', color:'#777', lineHeight:1.7}}>
-                  💡 保存后需点击右上角「更新」重新部署，前台 Gallery 全站底部才会显示新横幅。
+                  💡 保存后需点击右上角「更新」重新部署，前台 Gallery 内页才会显示新横幅。
                 </div>
               </>
             )}
