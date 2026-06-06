@@ -80,6 +80,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
         title: safeTitle,
         widgets: formattedWidgets || {},
       },
+      revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
     }
   }
 )

@@ -41,7 +41,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
         page,
         tags,
       },
-      // revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
+      revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
     }
   }
 )

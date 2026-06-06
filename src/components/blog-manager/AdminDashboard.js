@@ -24,6 +24,33 @@ import {
   isVideoImageContent,
   serializeBlocksForSave,
 } from '@/src/lib/admin/contentMediaFlush';
+import { slugify } from '@/src/lib/util';
+
+async function triggerContentRevalidation(payload = { scope: 'full' }) {
+  try {
+    const res = await fetch('/api/admin/revalidate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || data.success === false) {
+      console.warn('页面增量刷新部分失败', data);
+    }
+    return data;
+  } catch (e) {
+    console.warn('页面增量刷新请求失败', e);
+    return null;
+  }
+}
+
+function resolveRevalidateTagIds(tagsString) {
+  return (tagsString || '')
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((name) => slugify(name));
+}
 
 // ================= 1. 图标库 =================
 const Icons = {
@@ -1155,6 +1182,7 @@ const [mounted, setMounted] = useState(false);
   const [editorBlocks, setEditorBlocks] = useState([]);
   const editorBlocksRef = useRef(editorBlocks);
   editorBlocksRef.current = editorBlocks;
+  const editingSlugRef = useRef(null);
   const [isDeploying, setIsDeploying] = useState(false);
   const [tagDraft, setTagDraft] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
@@ -1312,7 +1340,10 @@ const [mounted, setMounted] = useState(false);
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (res.ok) await fetchPosts();
+      if (res.ok) {
+        await fetchPosts();
+        await triggerContentRevalidation({ scope: 'full' });
+      }
     } catch (err) {
       setActiveThemeLocal(themeConfig?.excerpt?.trim() || 'v1');
       alert("切换失败");
@@ -1469,6 +1500,7 @@ const [mounted, setMounted] = useState(false);
           : parseContentToBlocks(post.content);
         setEditorBlocks(eb);
         setCurrentId(p.id);
+        editingSlugRef.current = post.slug || null;
         setView('edit');
         setExpandedStep(1);
       }
@@ -1486,6 +1518,7 @@ const [mounted, setMounted] = useState(false);
     });
     setForm({ title: '', slug: 'p-'+Date.now().toString(36), excerpt:'', content:'', category:'', tags:'', cover:'', status:'Published', type: 'Post', date: new Date().toISOString().split('T')[0] });
     setCurrentId(null);
+    editingSlugRef.current = null;
     setView('edit');
     setExpandedStep(1);
   };
@@ -1532,7 +1565,12 @@ const [mounted, setMounted] = useState(false);
         }),
       });
       const d = await r.json();
-      if (d.success) { alert('✓ 广告位已保存'); await loadGalleryAd(); await fetchPosts(); }
+      if (d.success) {
+        alert('✓ 广告位已保存');
+        await loadGalleryAd();
+        await fetchPosts();
+        await triggerContentRevalidation({ scope: 'widget' });
+      }
       else alert('保存失败：' + (d.error || '未知错误'));
     } catch (e) { alert('保存失败：' + e.message); }
     finally { setGalleryAdSaving(false); }
@@ -1547,6 +1585,7 @@ const [mounted, setMounted] = useState(false);
         setGalleryAd({ id: null, url: '', promoText: '', cover: '' });
         alert('✓ 广告位已清空');
         await fetchPosts();
+        await triggerContentRevalidation({ scope: 'widget' });
       } else alert('清空失败：' + (d.error || '未知错误'));
     } catch (e) { alert('清空失败：' + e.message); }
     finally { setGalleryAdSaving(false); }
@@ -1577,6 +1616,7 @@ const [mounted, setMounted] = useState(false);
       if (!d.success) { alert('保存失败：' + (d.error || '未知错误')); clearFriendBtn(key); return; }
       if (!friend.id) setFriendDraft({ name: '', url: '', avatar: '' });
       await loadFriends();
+      await triggerContentRevalidation({ scope: 'friends' });
       setFriendBtnStatus(prev => ({ ...prev, [key]: 'done' }));
       setTimeout(() => clearFriendBtn(key), 1600);
     } catch (e) { alert('保存失败：' + e.message); clearFriendBtn(key); }
@@ -1589,6 +1629,7 @@ const [mounted, setMounted] = useState(false);
       const d = await r.json();
       if (!d.success) alert('删除失败：' + (d.error || '未知错误'));
       await loadFriends();
+      await triggerContentRevalidation({ scope: 'friends' });
     } catch (e) { alert('删除失败：' + e.message); }
     finally { setFriendsLoading(false); }
   };
@@ -1628,7 +1669,12 @@ const [mounted, setMounted] = useState(false);
         });
         const d = await res.json();
         if (!d.success) alert(`❌ 保存失败！\n\n错误信息:\n${d.error}`);
-        else { alert("✅ 保存成功！"); setView('list'); fetchPosts(); }
+        else {
+          alert("✅ 保存成功！");
+          setView('list');
+          fetchPosts();
+          await triggerContentRevalidation({ scope: 'widget' });
+        }
       } catch (e) { alert('网络错误: ' + e.message); }
       finally { setLoading(false); }
       return;
@@ -1721,6 +1767,14 @@ const [mounted, setMounted] = useState(false);
         }
 
         alert("✅ 保存成功！");
+        await triggerContentRevalidation({
+          scope: form.type === 'Page' ? 'full' : 'post',
+          slug: form.slug,
+          categoryId: form.category ? slugify(form.category) : null,
+          tagIds: resolveRevalidateTagIds(form.tags),
+          previousSlug: editingSlugRef.current,
+        });
+        editingSlugRef.current = form.slug;
         resetGalleryItems();
         setView('list');
         fetchPosts();
@@ -1738,19 +1792,30 @@ const [mounted, setMounted] = useState(false);
   const updateSiteTitle = async () => {
     const newTitle = prompt("请输入新的网站标题:", siteTitle);
     if (newTitle && newTitle !== siteTitle) {
-        setLoading(true); await fetch('/api/admin/config', { method: 'POST', body: JSON.stringify({ title: newTitle }) });
-        setSiteTitle(newTitle); setLoading(false);
+        setLoading(true);
+        await fetch('/api/admin/config', { method: 'POST', body: JSON.stringify({ title: newTitle }) });
+        setSiteTitle(newTitle);
+        await triggerContentRevalidation({ scope: 'full' });
+        setLoading(false);
     }
   };
 
   const handleManualDeploy = async () => {
-     if (isDeploying) return;
-     if(confirm('确定要立即更新Blog吗？\n点击确定将立刻开始更新，在完成内容更新前请不要重复提交更新请求！')) {
-        setIsDeploying(true);
-        try { await fetch('/api/admin/deploy'); } catch(e) {}
-        alert('已触发更新！请耐心等待（预计30分钟内完成）。请不要重复提交更新请求。');
-        setTimeout(() => setIsDeploying(false), 60000);
-     }
+    if (isDeploying) return;
+    if (!confirm('确定要立即刷新全站页面缓存吗？\n保存内容后通常会自动刷新，一般无需手动操作。')) return;
+    setIsDeploying(true);
+    try {
+      const data = await triggerContentRevalidation({ scope: 'full' });
+      if (data && data.failed > 0) {
+        alert(`⚠️ 部分页面刷新失败（${data.failed}/${data.total}），请查看控制台`);
+      } else {
+        alert(`✅ 全站页面已刷新（${data?.total ?? 0} 个路径）`);
+      }
+    } catch (e) {
+      alert('刷新失败：' + e.message);
+    } finally {
+      setTimeout(() => setIsDeploying(false), 5000);
+    }
   };
 
   const deleteTagOption = (e, tagToDelete) => {
@@ -1785,7 +1850,10 @@ const [mounted, setMounted] = useState(false);
       });
       const d = await r.json();
       if (!d.success) alert(d.error || '置顶操作失败');
-      else await fetchPosts();
+      else {
+        await fetchPosts();
+        await triggerContentRevalidation({ scope: 'post', slug: p.slug });
+      }
     } catch (err) {
       alert(err.message || '置顶操作失败');
     } finally {
@@ -1907,7 +1975,7 @@ const [mounted, setMounted] = useState(false);
            
            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
              {/* 🟢 修复：更新按钮 */}
-             <button onClick={handleManualDeploy} style={{background:'#424242', border: isDeploying ? '1px solid #555' : '1px solid greenyellow', opacity: isDeploying ? 0.5 : 1, padding:'10px', borderRadius:'8px', color: isDeploying ? '#888' : 'greenyellow', cursor: isDeploying ? 'not-allowed' : 'pointer'}} title="立即更新博客前端">
+             <button onClick={handleManualDeploy} style={{background:'#424242', border: isDeploying ? '1px solid #555' : '1px solid greenyellow', opacity: isDeploying ? 0.5 : 1, padding:'10px', borderRadius:'8px', color: isDeploying ? '#888' : 'greenyellow', cursor: isDeploying ? 'not-allowed' : 'pointer'}} title="立即刷新全站页面缓存（增量再生，无需重新部署）">
                <Icons.Refresh />
              </button>
              {view === 'list' ? <AnimatedBtn text="发布新内容" onClick={handleCreate} /> : <AnimatedBtn text="返回列表" onClick={leaveEditView} />}

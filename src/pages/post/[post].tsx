@@ -104,6 +104,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
 
       return {
         props: safeData,
+        revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
       }
     } catch (error) {
       console.error("🛡️ Render Error Bypass:", error)

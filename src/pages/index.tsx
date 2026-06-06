@@ -1,3 +1,4 @@
+import CONFIG from '@/blog.config'
 import { GetStaticProps, GetStaticPropsContext, NextPage } from 'next'
 import withNavFooter from '../components/withNavFooter'
 import { formatPosts } from '../lib/blog/format/post'
@@ -67,7 +68,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
           posts: finalPosts,
           widgets: finalWidgets,
         },
-        revalidate: 1,
+        revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
       }
     } catch (e) {
       console.error('Index page build failed:', e)
@@ -79,7 +80,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
           widgets: {},
           // 保留 sharedPageStaticProps 中的 activeTheme，由 withNavFooter 末尾再次校正
         },
-        revalidate: 1,
+        revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
       }
     }
   }

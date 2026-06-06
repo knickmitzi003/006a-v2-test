@@ -67,7 +67,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
         tagCategoryMapById,
         categoryTagMapById,
       },
-      // revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
+      revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
     }
   }
 )

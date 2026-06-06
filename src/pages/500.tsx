@@ -23,7 +23,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
       props: {
         ...sharedPageStaticProps.props,
       },
-      // revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
+      revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
     }
   }
 )

@@ -12,10 +12,7 @@ import { GalleryPostDownloadButton } from './GalleryPostDownloadButton'
 import { GalleryPostContent } from './GalleryPostContent'
 import { GalleryPostRecommendations } from './GalleryPostRecommendations'
 import { GalleryPostStats } from './GalleryPostStats'
-import {
-  galleryPostPreviewLabelClass,
-  galleryPostTitleClass,
-} from './galleryFonts'
+import { galleryPostTitleClass } from './galleryFonts'
 
 type GalleryPostProps = {
   post: Post
@@ -76,8 +73,6 @@ export const GalleryPost = ({
               initialStats={postStats}
               track="view"
             />
-
-            <p className={`mb-2 ${galleryPostPreviewLabelClass}`}>预览</p>
 
             {post.excerpt ? (
               <p className="mb-4 font-gallery text-sm font-normal leading-relaxed tracking-wide text-neutral-500">

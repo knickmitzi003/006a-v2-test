@@ -57,7 +57,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
         tag,
         subTitle,
       },
-      // revalidate: 60,
+      revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
     }
   }
 )

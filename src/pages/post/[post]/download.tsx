@@ -1,3 +1,4 @@
+import CONFIG from '@/blog.config'
 import { GetStaticProps, GetStaticPropsContext, NextPage } from 'next'
 import { BlogLayoutPure } from '@/src/components/layout/BlogLayout'
 import { Section404 } from '@/src/components/section/Section404'
@@ -98,7 +99,10 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
         })
       )
 
-      return { props: safeData }
+      return {
+        props: safeData,
+        revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
+      }
     } catch (error) {
       console.error('Gallery download page error:', error)
       return { notFound: true }

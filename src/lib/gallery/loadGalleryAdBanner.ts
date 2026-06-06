@@ -12,6 +12,10 @@ const GALLERY_AD_SLUG = 'gallery-ad'
 
 let buildCache: GalleryAdBanner | null | undefined
 
+export function clearGalleryAdBannerCache(): void {
+  buildCache = undefined
+}
+
 function readCoverUrl(
   cover: { type: string; url?: string | null } | undefined
 ): string | null {

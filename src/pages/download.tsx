@@ -1,3 +1,4 @@
+import CONFIG from '@/blog.config'
 import { GetStaticProps, GetStaticPropsContext, NextPage } from 'next'
 import { BlockRender } from '@/src/components/blocks/BlockRender'
 import { BlogLayoutPure } from '@/src/components/layout/BlogLayout'
@@ -69,6 +70,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
           title: safeTitle,
         })
       ),
+      revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
     }
   }
 )

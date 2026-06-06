@@ -7,6 +7,11 @@ import { getDatabaseIcon, getDatabaseTitle } from './getDatabase'
 const DEBUG_CACHING = process.env.NODE_ENV !== 'production'
 const cache = new Map<string, CachedNav>()
 
+/** ISR / 按需刷新前清空导航缓存，避免进程内旧数据 */
+export function clearCachedNavFooter(): void {
+  cache.clear()
+}
+
 export async function getCachedNavFooter(cacheTimeInSeconds = 60): Promise<{
   navPages: Page[]
   siteTitle: Title
