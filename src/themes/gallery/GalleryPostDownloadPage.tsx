@@ -99,7 +99,7 @@ export function GalleryPostDownloadPage({
                   href={postHref}
                   className="mt-3 inline-block font-gallery text-[13px] text-neutral-500 transition-colors hover:text-neutral-900"
                 >
-                  ← 返回作品预览
+                  ← 返回预览
                 </Link>
               </div>
 

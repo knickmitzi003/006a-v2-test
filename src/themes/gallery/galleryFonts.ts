@@ -22,9 +22,9 @@ export const galleryCardTitleClass =
 export const galleryCardTagClass =
   'font-gallery text-[12px] font-normal leading-[1.5] tracking-[0.03em] text-neutral-500 antialiased'
 
-/** 文章内页「作品预览：」标签（略大于卡片标签字号） */
+/** 文章内页「预览」标签 */
 export const galleryPostPreviewLabelClass =
-  'font-gallery text-[14px] font-normal leading-[1.5] tracking-[0.03em] text-neutral-500 antialiased'
+  'font-gallery text-[17px] font-medium leading-snug tracking-[0.02em] text-neutral-700 antialiased'
 
 /** 文章详情页标题 */
 export const galleryPostTitleClass =

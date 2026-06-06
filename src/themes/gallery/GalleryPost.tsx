@@ -77,15 +77,13 @@ export const GalleryPost = ({
               track="view"
             />
 
-            <p className={`mb-6 ${galleryPostPreviewLabelClass}`}>预览</p>
+            <p className={`mb-2 ${galleryPostPreviewLabelClass}`}>预览</p>
 
             {post.excerpt ? (
-              <p className="mb-8 font-gallery text-sm font-normal leading-relaxed tracking-wide text-neutral-500">
+              <p className="mb-4 font-gallery text-sm font-normal leading-relaxed tracking-wide text-neutral-500">
                 {post.excerpt}
               </p>
-            ) : (
-              <div className="mb-8" />
-            )}
+            ) : null}
 
             <GalleryPostContent postSlug={post.slug} blocks={blocks} />
 
