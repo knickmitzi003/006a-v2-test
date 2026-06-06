@@ -20,21 +20,38 @@ export default async function handler(req, res) {
   }
 
   try {
-    clearContentBuildCaches()
-
     const {
       scope = 'post',
       slug,
       category,
       tags,
       previousSlug,
+      listScope = 'full',
+      paths: explicitPaths,
+      clearCaches = true,
     } = req.body ?? {}
+
+    if (scope === 'list') {
+      const paths =
+        listScope === 'full' ? await collectAllRevalidatePaths() : []
+      return res.status(200).json({
+        success: true,
+        paths,
+        total: paths.length,
+      })
+    }
+
+    if (clearCaches) {
+      clearContentBuildCaches()
+    }
 
     const categoryId = category?.trim() ? slugify(category.trim()) : null
     const tagIds = resolveTagIds(tags)
 
     let paths
-    if (scope === 'full') {
+    if (scope === 'batch') {
+      paths = Array.isArray(explicitPaths) ? explicitPaths : []
+    } else if (scope === 'full') {
       paths = await collectAllRevalidatePaths()
     } else if (scope === 'friends') {
       paths = ['/', '/friends']

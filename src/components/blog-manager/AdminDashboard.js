@@ -43,6 +43,114 @@ async function triggerContentRevalidation(payload = { scope: 'full' }) {
   }
 }
 
+const THEME_REVALIDATE_BATCH_SIZE = 3;
+
+function describeRevalidatePath(path) {
+  if (path === '/') return '首页';
+  if (path === '/about') return '关于页';
+  if (path === '/friends') return '友链页';
+  if (path === '/download') return '下载说明页';
+  if (path === '/category') return '分类列表';
+  if (path === '/tag') return '标签列表';
+  if (path === '/archive') return '归档页';
+  if (path.startsWith('/post/') && path.endsWith('/download')) {
+    return `下载页 · ${path.slice(6, -9)}`;
+  }
+  if (path.startsWith('/post/')) return `文章 · ${path.slice(6)}`;
+  if (path.startsWith('/category/')) return `分类 · ${path.slice(10)}`;
+  if (path.startsWith('/tag/')) return `标签 · ${path.slice(5)}`;
+  if (path.startsWith('/archive/')) return `归档 · 第 ${path.slice(9)} 页`;
+  if (path.startsWith('/draft/')) return `草稿 · ${path.slice(7)}`;
+  return path;
+}
+
+/** 主题切换：分批刷新全站，返回真实进度 */
+async function runThemeRevalidation(onProgress) {
+  onProgress({
+    step: 2,
+    totalSteps: 3,
+    label: '正在统计需要更新的页面…',
+    done: 0,
+    total: 0,
+    hint: '正在读取站点页面列表',
+  });
+
+  const listRes = await fetch('/api/admin/revalidate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scope: 'list', listScope: 'full' }),
+  });
+  const listData = await listRes.json();
+  if (!listRes.ok || !listData.success) {
+    throw new Error(listData.error || '无法获取页面列表');
+  }
+
+  const paths = listData.paths || [];
+  const total = paths.length;
+  let done = 0;
+  let failedCount = 0;
+
+  onProgress({
+    step: 2,
+    totalSteps: 3,
+    label: `共 ${total} 个页面待更新`,
+    done: 0,
+    total,
+    hint: '将分批更新前台页面，请稍候',
+  });
+
+  for (let i = 0; i < paths.length; i += THEME_REVALIDATE_BATCH_SIZE) {
+    const batch = paths.slice(i, i + THEME_REVALIDATE_BATCH_SIZE);
+    const batchLabel = batch.map(describeRevalidatePath).join('、');
+
+    onProgress({
+      step: 2,
+      totalSteps: 3,
+      label: `正在更新：${batchLabel}`,
+      done,
+      total,
+      hint: `${done + 1}–${Math.min(done + batch.length, total)} / ${total}`,
+    });
+
+    const batchRes = await fetch('/api/admin/revalidate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scope: 'batch',
+        paths: batch,
+        clearCaches: i === 0,
+      }),
+    });
+    const batchData = await batchRes.json();
+    if (!batchRes.ok) {
+      failedCount += batch.length;
+    } else {
+      failedCount += batchData.failed || 0;
+    }
+
+    done += batch.length;
+    onProgress({
+      step: 2,
+      totalSteps: 3,
+      label: failedCount > 0 ? `部分页面更新失败（${failedCount}）` : `已完成 ${done}/${total}`,
+      done,
+      total,
+      hint: batchLabel,
+    });
+  }
+
+  onProgress({
+    step: 3,
+    totalSteps: 3,
+    label: failedCount > 0 ? '主题已切换，部分页面需稍后自动更新' : '主题切换完成',
+    done: total,
+    total,
+    hint: failedCount > 0 ? `${failedCount} 个页面未能更新，可点右上角按钮重试` : '前台页面已全部更新',
+  });
+
+  return { total, failed: failedCount };
+}
+
 // ================= 1. 图标库 =================
 const Icons = {
   Search: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
@@ -87,9 +195,11 @@ const GlobalStyle = () => (
     .tag-chip:hover .tag-del { display: flex; }
     .loader-overlay { position: fixed; inset: 0; background: rgba(20, 20, 23, 0.95); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px); flex-direction: column; padding: 24px; box-sizing: border-box; }
     .loader-text { margin-top: 20px; font-family: monospace; color: #888; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; }
-    .loader-phase { margin-top: 28px; font-size: 16px; font-weight: 600; color: #fff; text-align: center; letter-spacing: 0.5px; }
+    .loader-phase { margin-top: 28px; font-size: 16px; font-weight: 600; color: #fff; text-align: center; letter-spacing: 0.5px; max-width: 520px; line-height: 1.45; }
+    .loader-step { font-size: 12px; color: greenyellow; letter-spacing: 0.12em; margin-top: 8px; font-weight: 700; text-align: center; }
     .loader-detail { margin-top: 10px; font-size: 13px; color: greenyellow; text-align: center; min-height: 20px; }
-    .loader-hint { margin-top: 8px; font-size: 11px; color: #666; text-align: center; max-width: 320px; line-height: 1.6; }
+    .loader-hint { margin-top: 8px; font-size: 11px; color: #666; text-align: center; max-width: 420px; line-height: 1.6; }
+    .loader-lock-hint { font-size: 12px; color: #888; margin-top: 18px; text-align: center; max-width: 420px; line-height: 1.6; }
     .loader-progress-track { margin-top: 18px; width: min(320px, 80vw); height: 6px; background: #2a2a2e; border-radius: 999px; overflow: hidden; border: 1px solid #333; }
     .loader-progress-bar { height: 100%; background: linear-gradient(90deg, #adff2f, #84cc16); border-radius: 999px; transition: width 0.35s ease; }
     .loader { display: flex; margin: 0.25em 0; }
@@ -539,7 +649,7 @@ const CategoryPicker = ({ value, categories, onChange }) => {
 const SAVE_PHASE_META = {
   media: {
     title: '正在上传图片块',
-    hint: '每张会先压缩到约几百 KB，再上传云端',
+    hint: '图片处理上传中，请稍候',
   },
   post: {
     title: '正在保存文章',
@@ -554,23 +664,30 @@ const SAVE_PHASE_META = {
 function getGalleryLoaderHint(phase, progress) {
   if (phase !== 'gallery') return SAVE_PHASE_META[phase]?.hint || '';
   if (progress?.total > 0) return SAVE_PHASE_META.gallery.hint;
-  return '正在同步图库到数据库…';
+  return '正在同步图库内容…';
 }
 
 const FullScreenLoader = ({ phase, progress }) => {
+  const isTheme = phase === 'theme';
   const meta = SAVE_PHASE_META[phase];
-  const title =
-    phase === 'gallery' && !(progress?.total > 0)
+  const title = isTheme
+    ? (progress?.label || '正在切换主题…')
+    : phase === 'gallery' && !(progress?.total > 0)
       ? '正在同步图库'
       : meta?.title || '加载中…';
-  const hint = getGalleryLoaderHint(phase, progress);
+  const hint = isTheme
+    ? (progress?.hint || '')
+    : getGalleryLoaderHint(phase, progress);
   const hasProgress = progress && progress.total > 0;
   const pct = hasProgress
     ? Math.min(100, Math.round((progress.done / progress.total) * 100))
     : 0;
+  const stepLine = isTheme && progress?.totalSteps
+    ? `步骤 ${progress.step} / ${progress.totalSteps}`
+    : null;
 
   return (
-    <div className="loader-overlay">
+    <div className="loader-overlay" role="alertdialog" aria-modal="true" aria-busy="true">
       <div className="loader">
         <svg viewBox="0 0 200 60" width="200" height="60">
           <path className="dash" fill="none" stroke="greenyellow" strokeWidth="3" d="M20,50 L20,10 L50,10 C65,10 65,30 50,30 L20,30" />
@@ -578,21 +695,28 @@ const FullScreenLoader = ({ phase, progress }) => {
           <path className="dash" fill="none" stroke="greenyellow" strokeWidth="3" d="M140,30 A20,20 0 1,0 180,30 A20,20 0 1,0 140,30" />
         </svg>
       </div>
-      <div className="loader-text">SYSTEM PROCESSING</div>
+      <div className="loader-text">处理中</div>
+      {stepLine ? <div className="loader-step">{stepLine}</div> : null}
       <div className="loader-phase">{title}</div>
       {hasProgress ? (
         <div className="loader-detail">
-          已完成 {progress.done} / {progress.total} 张（{pct}%）
+          已完成 {progress.done} / {progress.total} 页（{pct}%）
         </div>
       ) : (
-        <div className="loader-detail">{phase === 'post' ? '请稍候…' : ''}</div>
+        <div className="loader-detail">{isTheme || phase === 'post' ? '请稍候…' : ''}</div>
       )}
-      {hasProgress ? (
+      {hasProgress || isTheme ? (
         <div className="loader-progress-track">
-          <div className="loader-progress-bar" style={{ width: `${pct}%` }} />
+          <div
+            className="loader-progress-bar"
+            style={{ width: `${hasProgress ? pct : (isTheme && progress?.step ? Math.round((progress.step / progress.totalSteps) * 100) : 0)}%` }}
+          />
         </div>
       ) : null}
       {hint ? <div className="loader-hint">{hint}</div> : null}
+      {isTheme ? (
+        <div className="loader-lock-hint">主题切换期间请勿操作后台，以免数据冲突</div>
+      ) : null}
     </div>
   );
 };
@@ -956,7 +1080,7 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
   return (
     <div style={{marginTop:'30px'}}>
       <div style={{display:'flex', gap:'15px', marginBottom:'25px', justifyContent:'center', flexWrap:'wrap'}}>
-          <div className="neo-btn" onClick={()=>addBlock('h1')}>标题块</div>
+          <div className="neo-btn" onClick={()=>addBlock('h1')}>正文标题</div>
           <div className="neo-btn" onClick={()=>addBlock('text')}>📝 内容块</div>
           <div className="neo-btn" onClick={()=>addBlock('image')}>🖼️ 图片块</div>
           <div className="neo-btn" onClick={()=>addBlock('quote')}>❝ 引用</div>
@@ -1154,6 +1278,7 @@ const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [posts, setPosts] = useState([]);
   const [isThemeLoading, setIsThemeLoading] = useState(false);
+  const [themeSwitchProgress, setThemeSwitchProgress] = useState(null);
   const [activeThemeLocal, setActiveThemeLocal] = useState(null);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
 
@@ -1319,10 +1444,20 @@ const [mounted, setMounted] = useState(false);
 
   // 🟢 5. 处理函数
   const handleThemeChange = async (version) => {
-    if (isThemeLoading || version === currentActiveTheme) return;
+    if (isThemeLoading || isDeploying || loading || version === currentActiveTheme) return;
     const configItem = themeConfig || posts.find(p => p.slug === 'theme-config');
     if (!configItem) { alert("未找到配置页"); return; }
+    const previousTheme = currentActiveTheme;
+    setThemeMenuOpen(false);
     setIsThemeLoading(true);
+    setThemeSwitchProgress({
+      step: 1,
+      totalSteps: 3,
+      label: '正在保存主题设置…',
+      done: 0,
+      total: 0,
+      hint: `切换至 ${ADMIN_THEMES.find(t => t.id === version)?.label || version}`,
+    });
     setActiveThemeLocal(version);
     try {
       const payload = { id: configItem.id, title: configItem.title || '主题配置', slug: 'theme-config', excerpt: version };
@@ -1331,14 +1466,23 @@ const [mounted, setMounted] = useState(false);
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (res.ok) {
-        await fetchPosts();
-        await triggerContentRevalidation({ scope: 'full' });
+      if (!res.ok) throw new Error('保存主题配置失败');
+
+      const refreshResult = await runThemeRevalidation(setThemeSwitchProgress);
+      await fetchPosts();
+
+      if (refreshResult.failed > 0) {
+        alert(`主题已切换，但有 ${refreshResult.failed} 个页面未能更新。\n可稍后在列表页点右上角按钮重试。`);
+      } else {
+        alert('✅ 主题切换完成，前台页面已全部更新。');
       }
     } catch (err) {
-      setActiveThemeLocal(themeConfig?.excerpt?.trim() || 'v1');
-      alert("切换失败");
-    } finally { setIsThemeLoading(false); }
+      setActiveThemeLocal(previousTheme);
+      alert('切换失败：' + (err.message || '未知错误'));
+    } finally {
+      setIsThemeLoading(false);
+      setThemeSwitchProgress(null);
+    }
   };
 
   // 🟢 6. useEffect 挂载
@@ -1648,7 +1792,7 @@ const [mounted, setMounted] = useState(false);
   };
   
   const handleSave = async () => {
-    if (isDeploying) return alert("请等待更新完成...");
+    if (isDeploying || isThemeLoading) return alert("请等待当前任务完成...");
 
     // 🧩 组件(Widget)：仅更新 标题/摘要/头像(cover)，不触碰正文块，避免误改导致部署失败
     if (form.type === 'Widget') {
@@ -1798,15 +1942,15 @@ const [mounted, setMounted] = useState(false);
   };
 
   const handleManualDeploy = async () => {
-    if (isDeploying) return;
-    if (!confirm('确定要立即刷新全站页面缓存吗？\n保存内容后通常会自动刷新，一般无需手动操作。')) return;
+    if (isDeploying || isThemeLoading) return;
+    if (!confirm('确定要立即更新全站前台页面吗？\n保存内容后通常会自动更新，一般无需手动操作。')) return;
     setIsDeploying(true);
     try {
       const data = await triggerContentRevalidation({ scope: 'full' });
       if (data && data.failed > 0) {
-        alert(`⚠️ 部分页面刷新失败（${data.failed}/${data.total}），请查看控制台`);
+        alert(`⚠️ 部分页面更新失败（${data.failed}/${data.total}），请稍后重试`);
       } else {
-        alert(`✅ 全站页面已刷新（${data?.total ?? 0} 个路径）`);
+        alert(`✅ 全站页面已更新（${data?.total ?? 0} 个页面）`);
       }
     } catch (e) {
       alert('刷新失败：' + e.message);
@@ -1944,6 +2088,8 @@ const [mounted, setMounted] = useState(false);
 
   if (!mounted) return null;
 
+  const adminLocked = isThemeLoading || isDeploying;
+
   return (
     <div style={{ minHeight: '100vh', background: '#303030', padding: '40px 20px' }}>
       <Head>
@@ -1952,14 +2098,15 @@ const [mounted, setMounted] = useState(false);
         <link rel="shortcut icon" href="/favicon-32x32.png" />
       </Head>
       <GlobalStyle />
-      {loading && <FullScreenLoader phase={savePhase} progress={saveProgress} />}
+      {loading && !isThemeLoading && <FullScreenLoader phase={savePhase} progress={saveProgress} />}
+      {isThemeLoading && <FullScreenLoader phase="theme" progress={themeSwitchProgress} />}
       <CoverMissingModal
         open={coverModalOpen}
         closing={coverModalClosing}
         onConfirm={confirmCoverAndSave}
         onCancel={closeCoverModal}
       />
-      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', opacity: adminLocked ? 0.45 : 1, pointerEvents: adminLocked ? 'none' : 'auto', transition: 'opacity 0.25s ease' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
              {view === 'list' && <SearchInput value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />}
@@ -1972,7 +2119,7 @@ const [mounted, setMounted] = useState(false);
            
            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
              {/* 🟢 修复：更新按钮 */}
-             <button onClick={handleManualDeploy} style={{background:'#424242', border: isDeploying ? '1px solid #555' : '1px solid greenyellow', opacity: isDeploying ? 0.5 : 1, padding:'10px', borderRadius:'8px', color: isDeploying ? '#888' : 'greenyellow', cursor: isDeploying ? 'not-allowed' : 'pointer'}} title="立即刷新全站页面缓存（增量再生，无需重新部署）">
+             <button onClick={handleManualDeploy} style={{background:'#424242', border: isDeploying ? '1px solid #555' : '1px solid greenyellow', opacity: isDeploying ? 0.5 : 1, padding:'10px', borderRadius:'8px', color: isDeploying ? '#888' : 'greenyellow', cursor: isDeploying ? 'not-allowed' : 'pointer'}} title="立即更新全站前台页面">
                <Icons.Refresh />
              </button>
              {view === 'list' ? <AnimatedBtn text="发布新内容" onClick={handleCreate} /> : <AnimatedBtn text="返回列表" onClick={leaveEditView} />}
