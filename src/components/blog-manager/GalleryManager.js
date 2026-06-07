@@ -25,6 +25,17 @@ const sortModeKeyframes = `
   0%, 100% { transform: rotate(-0.6deg); }
   50% { transform: rotate(0.6deg); }
 }
+@keyframes gallery-drop-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(173, 255, 47, 0.35), inset 0 0 28px rgba(173, 255, 47, 0.1); }
+  50% { box-shadow: 0 0 0 5px rgba(173, 255, 47, 0.45), inset 0 0 36px rgba(173, 255, 47, 0.14); }
+}
+.img-drop.img-drop-over {
+  border-color: greenyellow !important;
+  background: #1f261b !important;
+  color: greenyellow !important;
+  animation: gallery-drop-pulse 1.2s ease-in-out infinite;
+  transform: scale(1.01);
+}
 `
 
 /**
@@ -45,6 +56,8 @@ export function GalleryManager({
   const [sortMode, setSortMode] = useState(false)
   const [dragIndex, setDragIndex] = useState(null)
   const [overIndex, setOverIndex] = useState(null)
+  const [fileDragOver, setFileDragOver] = useState(false)
+  const fileDragDepthRef = useRef(0)
 
   const slug = (postSlug || '').trim()
   const pendingCount = countPendingGalleryItems(items)
@@ -79,6 +92,12 @@ export function GalleryManager({
 
   useEffect(() => {
     return () => revokePendingGalleryItems(itemsRef.current)
+  }, [])
+
+  useEffect(() => {
+    const clearFileDrag = () => resetFileDragOver()
+    window.addEventListener('dragend', clearFileDrag)
+    return () => window.removeEventListener('dragend', clearFileDrag)
   }, [])
 
   const reorderItems = (from, to) => {
@@ -143,6 +162,14 @@ export function GalleryManager({
       return
     }
     saveSortOrder()
+  }
+
+  const isExternalFileDrag = (e) =>
+    Array.from(e.dataTransfer?.types || []).includes('Files')
+
+  const resetFileDragOver = () => {
+    fileDragDepthRef.current = 0
+    setFileDragOver(false)
   }
 
   const handleFiles = async (fileList) => {
@@ -242,16 +269,40 @@ export function GalleryManager({
 
       {!sortMode ? (
         <label
-          className="img-drop"
-          style={{ minHeight: '100px', marginBottom: '16px' }}
-          onDragOver={(e) => {
+          className={`img-drop${fileDragOver ? ' img-drop-over' : ''}`}
+          style={{
+            minHeight: '100px',
+            marginBottom: '16px',
+            transition: 'border-color 0.15s ease, background 0.15s ease, transform 0.15s ease',
+          }}
+          onDragEnter={(e) => {
+            if (!isExternalFileDrag(e)) return
             e.preventDefault()
             e.stopPropagation()
+            fileDragDepthRef.current += 1
+            setFileDragOver(true)
+          }}
+          onDragLeave={(e) => {
+            if (!isExternalFileDrag(e)) return
+            e.preventDefault()
+            e.stopPropagation()
+            fileDragDepthRef.current = Math.max(0, fileDragDepthRef.current - 1)
+            if (fileDragDepthRef.current === 0) setFileDragOver(false)
+          }}
+          onDragOver={(e) => {
+            if (!isExternalFileDrag(e)) return
+            e.preventDefault()
+            e.stopPropagation()
+            e.dataTransfer.dropEffect = 'copy'
+            setFileDragOver(true)
           }}
           onDrop={(e) => {
             e.preventDefault()
             e.stopPropagation()
-            handleFiles(e.dataTransfer.files)
+            resetFileDragOver()
+            if (isExternalFileDrag(e)) {
+              handleFiles(e.dataTransfer.files)
+            }
           }}
         >
           <input
@@ -265,11 +316,21 @@ export function GalleryManager({
             }}
           />
           <div style={{ pointerEvents: 'none', textAlign: 'center' }}>
-            <div style={{ fontSize: '15px', color: '#fff', marginBottom: '6px' }}>
-              拖拽或点击添加图片（Gallery图库）
+            <div
+              style={{
+                fontSize: '15px',
+                color: fileDragOver ? 'greenyellow' : '#fff',
+                marginBottom: '6px',
+                fontWeight: fileDragOver ? 'bold' : 'normal',
+                transition: 'color 0.15s ease',
+              }}
+            >
+              {fileDragOver
+                ? '松开鼠标，添加到此图库'
+                : '拖拽或点击添加图片（Gallery图库）'}
             </div>
-            <div style={{ fontSize: '12px', color: '#777' }}>
-              支持多张同时导入
+            <div style={{ fontSize: '12px', color: fileDragOver ? '#c5e87a' : '#777' }}>
+              {fileDragOver ? '支持多张图片同时放入' : '支持多张同时导入'}
             </div>
           </div>
         </label>
