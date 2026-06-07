@@ -1,8 +1,7 @@
 import { ApiScope } from '@/src/types/notion'
 import { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints'
 import {
-  combineScopeWithFilter,
-  slugEqualsFilter,
+  combineScopeWithSlugFilter,
 } from './filter'
 import { getAll, queryDatabasePages } from './getDatabase'
 import { readRichTextPlain } from './readProperty'
@@ -51,10 +50,7 @@ async function fetchRemoteThemeFromNotion(): Promise<string | null> {
   ]
 
   for (const scope of scopes) {
-    const filter = combineScopeWithFilter(
-      scope,
-      slugEqualsFilter(THEME_CONFIG_SLUG)
-    )
+    const filter = combineScopeWithSlugFilter(scope, THEME_CONFIG_SLUG)
     const results = await queryDatabasePages(filter, { pageSize: 5 })
     for (const page of results) {
       const excerpt = readRichTextPlain(page.properties['excerpt'])
@@ -183,8 +179,18 @@ export async function getPostBySlug(
   const trimmed = slug.trim()
   if (!trimmed) return null
 
-  const filter = combineScopeWithFilter(scope, slugEqualsFilter(trimmed))
-  const results = await queryDatabasePages(filter, { pageSize: 5 })
+  const filter = combineScopeWithSlugFilter(scope, trimmed)
+  let results: PageObjectResponse[] = []
+  try {
+    results = await queryDatabasePages(filter, { pageSize: 5 })
+  } catch (error) {
+    const code = (error as { code?: string })?.code
+    if (code !== 'validation_error') throw error
+    console.warn(
+      `[getPostBySlug] Notion filter rejected, falling back to scan: ${trimmed}`,
+      error
+    )
+  }
   const picked = pickPostBySlugResults(results, scope)
   if (picked) return picked
 
@@ -200,7 +206,7 @@ export async function getPostBySlug(
 }
 
 export const getPageBySlug = async (slug: string) => {
-  const filter = combineScopeWithFilter(ApiScope.Page, slugEqualsFilter(slug))
+  const filter = combineScopeWithSlugFilter(ApiScope.Page, slug)
   const results = await queryDatabasePages(filter, { pageSize: 1 })
   const page =
     results.find((object) => isNotionContentType(object, 'Page')) ?? null

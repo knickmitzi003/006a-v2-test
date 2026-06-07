@@ -15,6 +15,35 @@ export const slugEqualsFilter = (slug: string): ApiFilter => ({
   rich_text: { equals: slug },
 })
 
+/**
+ * Notion 不接受 and: [slug, { or: [...] }]，须把 slug 并入每个 or 分支的 and 内。
+ */
+export function combineScopeWithSlugFilter(
+  scope: ApiScope,
+  slug: string
+): ApiFilter {
+  const slugFilter = slugEqualsFilter(slug)
+  const scopeFilter = filterSwitch(scope)
+  if (!scopeFilter) return slugFilter
+
+  if ('or' in scopeFilter && Array.isArray(scopeFilter.or)) {
+    return {
+      or: scopeFilter.or.map((branch) => {
+        if (branch && typeof branch === 'object' && 'and' in branch && branch.and) {
+          return { and: [slugFilter, ...branch.and] }
+        }
+        return { and: [slugFilter, branch] }
+      }),
+    }
+  }
+
+  if ('and' in scopeFilter && Array.isArray(scopeFilter.and)) {
+    return { and: [slugFilter, ...scopeFilter.and] }
+  }
+
+  return { and: [slugFilter, scopeFilter] }
+}
+
 export const filterSwitch = (scope: ApiScope) => {
   let filter: ApiFilter
   switch (scope) {
