@@ -190,19 +190,48 @@ async function runBatchedRevalidation(options = {}) {
   return { total, failed: failedCount, succeeded: done };
 }
 
-/** 主题切换：壳层 + 首页最新一批文章内页（freshTheme 强制读 Notion theme-config） */
+/** 主题切换：先单独刷壳层（与右上角刷新按钮相同），再分批刷最新文章内页 */
 async function runThemeRevalidation(onProgress) {
-  return runBatchedRevalidation({
+  if (onProgress) {
+    onProgress({
+      step: 2,
+      totalSteps: 3,
+      label: '正在更新首页与列表页…',
+      done: 0,
+      total: 7,
+      hint: '优先刷新首页、归档与分类/标签',
+    });
+  }
+
+  const shellResult = await triggerContentRevalidation({
+    scope: 'shell',
+    clearCaches: true,
     freshTheme: true,
-    listScope: 'theme',
+  });
+
+  const postResult = await runBatchedRevalidation({
+    freshTheme: true,
+    listScope: 'theme-posts',
     onProgress,
     progressLabels: {
+      listing: '正在统计最新文章内页…',
+      running: '正在更新文章内页…',
       doneOk: '主题切换完成',
-      donePartial: '主题已切换，部分页面需稍后自动更新',
+      donePartial: '主题已切换，部分内页需稍后自动更新',
       hintOk: '首页、列表与最新文章内页已更新；更早文章内页随访问或 1 小时内更新',
-      hintPartial: '个页面未能及时更新，可稍后重试或打开单篇文章查看',
+      hintPartial: '个内页未能及时更新，可打开该篇文章触发更新',
     },
   });
+
+  const shellFailed = shellResult.ok ? 0 : 1;
+  const shellSucceeded = shellResult.ok ? (shellResult.succeeded ?? 7) : 0;
+
+  return {
+    total: shellSucceeded + postResult.total,
+    failed: shellFailed + postResult.failed,
+    succeeded: shellSucceeded + postResult.succeeded,
+    shellOk: shellResult.ok,
+  };
 }
 
 // ================= 1. 图标库 =================
@@ -930,7 +959,9 @@ const ThemeSwitchDoneModal = ({ open, closing, extraNote, onClose }) => {
         <p className="cover-modal-desc">
           BLOG主题已切换。
           <br /><br />
-          各篇<strong>内页</strong>会逐步完成更新，全站完整更新通常需要 <strong>1 小时</strong>。如需立即查看某篇内页样式更新效果，在BLOG直接打开该篇内页刷新即可。
+          若博客首页仍显示旧主题，请在博客页按 <strong>Ctrl+Shift+R</strong>（Mac：<strong>Cmd+Shift+R</strong>）强制刷新，或新开标签页访问。
+          <br /><br />
+          各篇<strong>内页</strong>会逐步完成更新（通常 1 小时内）；也可直接打开该篇内页触发立即更新。
           {extraNote ? (
             <>
               <br /><br />

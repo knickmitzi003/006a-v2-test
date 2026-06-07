@@ -76,9 +76,9 @@ export function resolveSaveRevalidateScope(
   return 'post'
 }
 
-/** Gallery 广告：壳层 + 首页归档最新一批文章页（其余随 ISR / 访问更新） */
-export async function collectGalleryAdRevalidatePaths(): Promise<string[]> {
-  const paths = new Set<string>(collectShellRevalidatePaths())
+/** 主题切换：仅首页归档最新一批文章内页（壳层由 collectShellRevalidatePaths 单独刷） */
+export async function collectThemePostRevalidatePaths(): Promise<string[]> {
+  const paths = new Set<string>()
   const { posts, pieces } = await getPostsAndPieces(ApiScope.Archive)
   const formatted = await formatPosts([...posts, ...pieces], FORMAT_POST_LIST_OPTIONS)
   const sorted = formatted.sort(
@@ -89,6 +89,15 @@ export async function collectGalleryAdRevalidatePaths(): Promise<string[]> {
   for (const post of recent) {
     paths.add(`/post/${post.slug}`)
     paths.add(`/post/${post.slug}/download`)
+  }
+  return Array.from(paths)
+}
+
+/** Gallery 广告：壳层 + 首页归档最新一批文章页（其余随 ISR / 访问更新） */
+export async function collectGalleryAdRevalidatePaths(): Promise<string[]> {
+  const paths = new Set<string>(collectShellRevalidatePaths())
+  for (const path of await collectThemePostRevalidatePaths()) {
+    paths.add(path)
   }
   return Array.from(paths)
 }

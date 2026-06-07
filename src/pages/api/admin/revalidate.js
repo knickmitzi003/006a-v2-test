@@ -7,6 +7,7 @@ import {
   collectPageRevalidatePaths,
   collectPostRevalidatePaths,
   collectShellRevalidatePaths,
+  collectThemePostRevalidatePaths,
   revalidateMany,
 } from '@/src/lib/blog/contentRevalidation'
 
@@ -48,6 +49,8 @@ export default async function handler(req, res) {
         paths = collectShellRevalidatePaths()
       } else if (listScope === 'theme') {
         paths = await collectGalleryAdRevalidatePaths()
+      } else if (listScope === 'theme-posts') {
+        paths = await collectThemePostRevalidatePaths()
       }
       return res.status(200).json({
         success: true,
