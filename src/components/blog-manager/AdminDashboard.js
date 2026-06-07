@@ -1917,11 +1917,28 @@ const [mounted, setMounted] = useState(false);
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (res.ok) {
-        await new Promise((r) => setTimeout(r, 1500));
-      }
-
       if (!res.ok) throw new Error('保存主题配置失败');
+
+      let confirmed = false;
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        await new Promise((r) => setTimeout(r, attempt === 0 ? 800 : 1200));
+        try {
+          const checkRes = await fetch('/api/admin/posts');
+          if (checkRes.ok) {
+            const checkData = await checkRes.json();
+            const remote = checkData.posts?.find((p) => p.slug === 'theme-config')?.excerpt?.trim();
+            if (remote === version) {
+              confirmed = true;
+              break;
+            }
+          }
+        } catch {
+          /* 下一轮重试 */
+        }
+      }
+      if (!confirmed) {
+        console.warn('[handleThemeChange] theme-config read-back not confirmed, revalidating anyway');
+      }
 
       const refreshResult = await runThemeRevalidation(setThemeSwitchProgress);
       await fetchPosts();
@@ -2423,7 +2440,7 @@ const [mounted, setMounted] = useState(false);
     showAdminToast('正在更新首页与列表页');
     if (silentRefreshRef.current) return;
     silentRefreshRef.current = true;
-    triggerContentRevalidation({ scope: 'shell', clearCaches: true })
+    triggerContentRevalidation({ scope: 'shell', clearCaches: true, freshTheme: true })
       .then((rev) => showRevalidateFeedback(rev, showAdminToast))
       .catch((e) => console.warn('列表页更新失败', e))
       .finally(() => { silentRefreshRef.current = false; });

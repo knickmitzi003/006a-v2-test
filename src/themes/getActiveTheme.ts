@@ -29,9 +29,10 @@ export async function resolveActiveTheme(
     console.error('resolveActiveTheme: getRemoteTheme failed', e)
   }
 
-  const envTheme = themeFromEnv()
-  if (envTheme) {
-    return envTheme
+  // 生产环境勿用 NEXT_PUBLIC_THEME 覆盖 Notion（否则切回 standard 会被 env 锁在 gallery）
+  if (process.env.NODE_ENV === 'development') {
+    const envTheme = themeFromEnv()
+    if (envTheme) return envTheme
   }
 
   return fallbackId

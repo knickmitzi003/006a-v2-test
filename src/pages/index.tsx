@@ -19,7 +19,10 @@ const Home: NextPage<{
   widgets: { [key: string]: unknown }
   activeTheme: ThemeId
 }> = ({ posts, widgets, activeTheme, siteTitle, navPages }) => {
-  const themeId = activeTheme || themeFromEnv() || 'anzifan'
+  const themeId =
+    activeTheme ||
+    (process.env.NODE_ENV === 'development' ? themeFromEnv() : null) ||
+    'anzifan'
   const HomeView = getThemeHomeComponent(themeId)
   return (
     <HomeView

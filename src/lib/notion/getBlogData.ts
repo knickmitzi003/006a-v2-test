@@ -2,6 +2,7 @@ import { ApiScope } from '@/src/types/notion'
 import { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints'
 import {
   combineScopeWithSlugFilter,
+  slugEqualsFilter,
 } from './filter'
 import { getAll, queryDatabasePages } from './getDatabase'
 import { readRichTextPlain } from './readProperty'
@@ -41,83 +42,56 @@ function filterPagesByType(
   )
 }
 
+/** 仅按 slug 查 theme-config，不受 status/type 范围限制（Widget 也能命中） */
 async function fetchRemoteThemeFromNotion(): Promise<string | null> {
-  const scopes: ApiScope[] = [
-    ApiScope.Home,
-    ApiScope.Archive,
-    ApiScope.Page,
-    ApiScope.Draft,
-  ]
-
-  for (const scope of scopes) {
-    const filter = combineScopeWithSlugFilter(scope, THEME_CONFIG_SLUG)
-    const results = await queryDatabasePages(filter, { pageSize: 5 })
-    for (const page of results) {
+  try {
+    const results = await queryDatabasePages(
+      slugEqualsFilter(THEME_CONFIG_SLUG),
+      { pageSize: 5 }
+    )
+    const page =
+      results.find(
+        (p) => readRichTextPlain(p.properties['slug']) === THEME_CONFIG_SLUG
+      ) ?? results[0]
+    if (page) {
       const excerpt = readRichTextPlain(page.properties['excerpt'])
       if (excerpt) return excerpt
     }
+  } catch (error) {
+    console.warn('[fetchRemoteThemeFromNotion] slug query failed, scanning Home', error)
   }
 
-  for (const scope of scopes) {
-    const objects = await getAll(scope)
-    let themeConfigPage: PageObjectResponse | undefined
-
-    if (scope === ApiScope.Page) {
-      themeConfigPage = findThemeConfigPage(filterPagesByType(objects, 'Page'))
-      if (!themeConfigPage) {
-        themeConfigPage = findThemeConfigPage(objects)
-      }
-    } else if (scope === ApiScope.Home) {
-      themeConfigPage = findThemeConfigPage(filterPagesByType(objects, 'Widget'))
-      if (!themeConfigPage) {
-        themeConfigPage = findThemeConfigPage(objects)
-      }
-    } else {
-      themeConfigPage = findThemeConfigPage(filterPagesByType(objects, 'Post'))
-      if (!themeConfigPage) {
-        themeConfigPage = findThemeConfigPage(objects)
-      }
-    }
-
-    if (themeConfigPage) {
-      const excerpt = readRichTextPlain(themeConfigPage.properties['excerpt'])
-      if (excerpt) return excerpt
-    }
-  }
-
-  return null
+  const objects = await getAll(ApiScope.Home)
+  const themeConfigPage =
+    findThemeConfigPage(filterPagesByType(objects, 'Widget')) ??
+    findThemeConfigPage(objects)
+  if (!themeConfigPage) return null
+  return readRichTextPlain(themeConfigPage.properties['excerpt']) || null
 }
 
 /**
  * 读取 Notion 中 slug=theme-config 页面的 excerpt（v1 / v2 / gallery 等原始代号）。
- * 同一次 next build 内只请求 Notion 一次（Promise 去重）；失败时缓存 null，避免重试风暴。
+ * - next build：同一次构建内缓存一次（减少 Notion 调用）
+ * - Vercel ISR：每次页面再生都读 Notion（温实例模块缓存不能跨主题切换复用）
  */
 export const getRemoteTheme = async (): Promise<string | null> => {
-  if (
-    revalidateFreshTheme ||
-    process.env.DISABLE_REMOTE_THEME_CACHE === '1'
-  ) {
-    try {
-      return await fetchRemoteThemeFromNotion()
-    } catch (e) {
-      console.error('获取远程主题配置失败:', e)
-      return null
-    }
-  }
+  const persistAcrossCalls =
+    process.env.NEXT_PHASE === 'phase-production-build' &&
+    process.env.DISABLE_REMOTE_THEME_CACHE !== '1'
 
-  if (remoteThemeCached !== undefined) {
+  if (persistAcrossCalls && remoteThemeCached !== undefined) {
     return remoteThemeCached
   }
 
   if (!remoteThemeInflight) {
     remoteThemeInflight = fetchRemoteThemeFromNotion()
       .then((value) => {
-        remoteThemeCached = value
+        if (persistAcrossCalls) remoteThemeCached = value
         return value
       })
       .catch((e) => {
         console.error('获取远程主题配置失败:', e)
-        remoteThemeCached = null
+        if (persistAcrossCalls) remoteThemeCached = null
         return null
       })
       .finally(() => {
