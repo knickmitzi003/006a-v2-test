@@ -17,17 +17,17 @@ export type FormatPostOptions = {
 
 export const formatPosts = async (
   posts: PageObjectResponse[],
-  options?: FormatPostOptions
+  formatOptions?: FormatPostOptions
 ): Promise<Post[]> => {
   const formattedPosts = await Promise.all(
-    posts.map(async (post) => formatPost(post, options))
+    posts.map(async (post) => formatPost(post, formatOptions))
   )
   return sortPostsByPinnedThenDate(formattedPosts)
 }
 
 const formatPost = async (
   post: PageObjectResponse,
-  options?: FormatPostOptions
+  formatOptions?: FormatPostOptions
 ): Promise<Post> => {
   const { id, properties } = post
   const {
@@ -41,9 +41,10 @@ const formatPost = async (
     cover_dark,
     category,
     tags,
-    ...options
+    ...extraProperties
   } = properties
-  const { color_title, original_cover, repost, download, download_size } = options
+  const { color_title, original_cover, repost, download, download_size } =
+    extraProperties
 
   const postTitle = title.type === 'title' && title.title[0]?.plain_text
   const postStatus =
@@ -66,7 +67,7 @@ const formatPost = async (
   let infoLight = defaultImgInfo
   let infoDark = defaultImgInfo
 
-  if (!options?.skipImageProbe) {
+  if (!formatOptions?.skipImageProbe) {
     try {
       if (postCoverLightSrc) {
         infoLight = await getImageInfo(postCoverLightSrc)
