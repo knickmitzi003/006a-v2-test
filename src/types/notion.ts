@@ -89,6 +89,10 @@ type PropertyFilter =
       property: string
       select: { equals: string } | { does_not_equal: string }
     }
+  | {
+      property: string
+      rich_text: { equals: string } | { contains: string }
+    }
 
 export type ApiFilter =
   | {

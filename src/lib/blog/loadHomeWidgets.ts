@@ -1,7 +1,7 @@
 import { Post } from '@/src/types/blog'
 import { ApiScope } from '@/src/types/notion'
 import getBlogStats from './getBlogStats'
-import { formatPosts } from './format/post'
+import { formatPosts, FORMAT_POST_LIST_OPTIONS } from './format/post'
 import { formatWidgets, preFormatWidgets } from './format/widget'
 import { ANNOUNCEMENT_SLUG } from './pinnedPosts'
 import { getPosts, getWidgets } from '../notion/getBlogData'
@@ -20,7 +20,7 @@ export async function getAnnouncementPost(): Promise<Post | null> {
     (p) => readRichTextPlain(p.properties['slug']) === ANNOUNCEMENT_SLUG
   )
   if (!raw) return null
-  const [post] = await formatPosts([raw])
+  const [post] = await formatPosts([raw], FORMAT_POST_LIST_OPTIONS)
   return post ?? null
 }
 

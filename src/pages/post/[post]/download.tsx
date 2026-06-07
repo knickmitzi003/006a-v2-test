@@ -5,11 +5,15 @@ import { Section404 } from '@/src/components/section/Section404'
 import withNavFooter from '@/src/components/withNavFooter'
 import { GALLERY_DOWNLOAD_INSTRUCTIONS_SLUG } from '@/src/lib/gallery/galleryDownloadPaths'
 import { formatBlocks } from '@/src/lib/blog/format/block'
-import { formatPosts } from '@/src/lib/blog/format/post'
+import { formatPosts, FORMAT_POST_LIST_OPTIONS } from '@/src/lib/blog/format/post'
 import { withNavFooterStaticProps } from '@/src/lib/blog/withNavFooterStaticProps'
 import { getAllBlocks } from '@/src/lib/notion/getBlocks'
-import { buildStaticPostPaths } from '@/src/lib/blog/postLimits'
-import { getPosts } from '@/src/lib/notion/getBlogData'
+import {
+  BLOG_STATIC_POST_PATHS_MAX,
+  buildStaticPostPaths,
+  onDemandStaticPaths,
+} from '@/src/lib/blog/postLimits'
+import { getPostBySlug, getPosts } from '@/src/lib/notion/getBlogData'
 import { addSubTitle } from '@/src/lib/util'
 import { GalleryPostDownloadPage } from '@/src/themes/gallery/GalleryPostDownloadPage'
 import { getPostStats } from '@/src/lib/gallery/postStats'
@@ -27,16 +31,15 @@ import {
 import { ApiScope, BlockResponse } from '@/src/types/notion'
 
 export const getStaticPaths = async () => {
+  if (!BLOG_STATIC_POST_PATHS_MAX || BLOG_STATIC_POST_PATHS_MAX <= 0) {
+    return onDemandStaticPaths
+  }
   const postsRaw = await getPosts(ApiScope.Archive)
-  const formattedPosts = await formatPosts(postsRaw, { skipImageProbe: true })
+  const formattedPosts = await formatPosts(postsRaw, FORMAT_POST_LIST_OPTIONS)
   const paths = buildStaticPostPaths(formattedPosts).map((post) => ({
     params: { post: post.slug },
   }))
-
-  return {
-    paths,
-    fallback: 'blocking',
-  }
+  return { paths, fallback: 'blocking' as const }
 }
 
 export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
@@ -59,11 +62,12 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     }
 
     try {
-      const postsRaw = await getPosts(ApiScope.Archive)
-      const allFormattedPosts = await formatPosts(postsRaw)
-      const post = allFormattedPosts.find((p) => p.slug === slug)
+      const rawPost = await getPostBySlug(slug, ApiScope.Archive)
+      if (!rawPost) return { notFound: true }
 
-      if (!post) return { notFound: true }
+      const post = (
+        await formatPosts([rawPost], FORMAT_POST_LIST_OPTIONS)
+      )[0]
 
       const postStats = await getPostStats(slug)
 
@@ -105,6 +109,14 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
       }
     } catch (error) {
       console.error('Gallery download page error:', error)
+      const message = error instanceof Error ? error.message : String(error)
+      const isTransient =
+        /ECONNRESET|ETIMEDOUT|ENOTFOUND|429|502|503|504|fetch failed|network/i.test(
+          message
+        )
+      if (isTransient) {
+        throw error
+      }
       return { notFound: true }
     }
   }

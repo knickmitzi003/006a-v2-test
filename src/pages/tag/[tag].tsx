@@ -6,9 +6,10 @@ import { Section404 } from '@/src/components/section/Section404'
 import { SubCollection } from '@/src/components/section/SubCollection'
 import withNavFooter from '@/src/components/withNavFooter'
 import { GalleryFilteredPosts } from '@/src/themes/gallery/GalleryFilteredPosts'
-import { formatPosts } from '@/src/lib/blog/format/post'
+import { formatPosts, FORMAT_POST_LIST_OPTIONS } from '@/src/lib/blog/format/post'
 import { getAllTags } from '@/src/lib/blog/format/tag'
 import { withNavFooterStaticProps } from '@/src/lib/blog/withNavFooterStaticProps'
+import { onDemandStaticPaths } from '@/src/lib/blog/postLimits'
 import { addSubTitle, getSubTitleInfo } from '@/src/lib/util'
 import {
   NextPageWithLayout,
@@ -23,15 +24,7 @@ import { getPosts } from '../../lib/notion/getBlogData'
 
 const { TAG } = CONFIG.DEFAULT_SPECIAL_PAGES
 
-export const getStaticPaths = async () => {
-  const posts = await getPosts(ApiScope.Archive)
-  const formattedPosts = await formatPosts(posts)
-  const tags = getAllTags(formattedPosts)
-  const paths = tags.map((tag) => ({
-    params: { tag: tag.id },
-  }))
-  return { paths, fallback: 'blocking' }
-}
+export const getStaticPaths = async () => onDemandStaticPaths
 
 export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
   async (
@@ -42,7 +35,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     const subTitle = getSubTitleInfo(slug, sharedPageStaticProps.props)
     addSubTitle(sharedPageStaticProps.props, '', subTitle)
     const posts = await getPosts(ApiScope.Archive)
-    const formattedPosts = await formatPosts(posts)
+    const formattedPosts = await formatPosts(posts, FORMAT_POST_LIST_OPTIONS)
     const tagId = context.params?.tag as string
     const postsByTag = formattedPosts.filter((post) =>
       post.tags.map((t) => t.id).includes(tagId)

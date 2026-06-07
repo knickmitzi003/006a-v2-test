@@ -348,7 +348,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const { id, title, content, slug, excerpt, category, tags, status, date, type, cover, download, download_size, blocksData } = body;
-      const useStructured = Array.isArray(blocksData) && blocksData.length > 0;
+      const useStructured = Array.isArray(blocksData);
 
       // 1. 获取目标页面属性，用于动态判定类型
       let targetProps = {};
@@ -396,15 +396,17 @@ export default async function handler(req, res) {
 
       if (id) {
         await withRetry(() => notion.pages.update({ page_id: id, properties: props }));
-        if (useStructured || (content !== undefined && content !== null && content.trim().length > 0)) {
+        const shouldReplaceBody = useStructured || content !== undefined;
+        if (shouldReplaceBody) {
             const children = await withRetry(() => notion.blocks.children.list({ block_id: id }));
             if (children.results.length > 0) {
-                // 串行删除 + 重试，降低弱网下并发导致连接重置的概率
                 for (const blk of children.results) {
                   await withRetry(() => notion.blocks.delete({ block_id: blk.id }));
                 }
             }
-            const newBlocks = useStructured ? structuredToBlocks(blocksData) : mdToBlocks(content);
+            const newBlocks = useStructured
+              ? structuredToBlocks(blocksData)
+              : (content && content.trim().length > 0 ? mdToBlocks(content) : []);
             for (let i = 0; i < newBlocks.length; i += 100) {
               await withRetry(() => notion.blocks.children.append({ block_id: id, children: newBlocks.slice(i, i + 100) }));
               if (i + 100 < newBlocks.length) await sleep(100); 

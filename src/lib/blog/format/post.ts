@@ -15,6 +15,11 @@ export type FormatPostOptions = {
   skipImageProbe?: boolean
 }
 
+/** 列表页、归档、ISR 路径收集等场景统一使用 */
+export const FORMAT_POST_LIST_OPTIONS: FormatPostOptions = {
+  skipImageProbe: true,
+}
+
 export const formatPosts = async (
   posts: PageObjectResponse[],
   formatOptions?: FormatPostOptions

@@ -7,8 +7,9 @@ import { SubCollection } from '@/src/components/section/SubCollection'
 import withNavFooter from '@/src/components/withNavFooter'
 import { GalleryFilteredPosts } from '@/src/themes/gallery/GalleryFilteredPosts'
 import { getAllCategories } from '@/src/lib/blog/format/category'
-import { formatPosts } from '@/src/lib/blog/format/post'
+import { formatPosts, FORMAT_POST_LIST_OPTIONS } from '@/src/lib/blog/format/post'
 import { withNavFooterStaticProps } from '@/src/lib/blog/withNavFooterStaticProps'
+import { onDemandStaticPaths } from '@/src/lib/blog/postLimits'
 import { addSubTitle, getSubTitleInfo } from '@/src/lib/util'
 import {
   Category,
@@ -23,15 +24,7 @@ import { getPosts } from '../../lib/notion/getBlogData'
 
 const { CATEGORY } = CONFIG.DEFAULT_SPECIAL_PAGES
 
-export const getStaticPaths = async () => {
-  const posts = await getPosts(ApiScope.Archive)
-  const formattedPosts = await formatPosts(posts)
-  const categories = getAllCategories(formattedPosts)
-  const paths = categories.map((category) => ({
-    params: { category: category.id },
-  }))
-  return { paths, fallback: 'blocking' }
-}
+export const getStaticPaths = async () => onDemandStaticPaths
 
 export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
   async (
@@ -42,7 +35,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     const subTitle = getSubTitleInfo(slug, sharedPageStaticProps.props)
     addSubTitle(sharedPageStaticProps.props, '', subTitle)
     const posts = await getPosts(ApiScope.Archive)
-    const formattedPosts = await formatPosts(posts)
+    const formattedPosts = await formatPosts(posts, FORMAT_POST_LIST_OPTIONS)
     const categoryId = context.params?.category as string
     const postsByCategory = formattedPosts.filter(
       (post) => post.category.id === categoryId

@@ -1,5 +1,20 @@
 import { ApiFilter, ApiScope } from '@/src/types/notion'
 
+export function combineScopeWithFilter(
+  scope: ApiScope,
+  extra: ApiFilter
+): ApiFilter {
+  const scopeFilter = filterSwitch(scope)
+  if (!extra) return scopeFilter
+  if (!scopeFilter) return extra
+  return { and: [extra, scopeFilter] }
+}
+
+export const slugEqualsFilter = (slug: string): ApiFilter => ({
+  property: 'slug',
+  rich_text: { equals: slug },
+})
+
 export const filterSwitch = (scope: ApiScope) => {
   let filter: ApiFilter
   switch (scope) {

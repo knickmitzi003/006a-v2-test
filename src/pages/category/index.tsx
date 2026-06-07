@@ -7,7 +7,7 @@ import { Section404 } from '@/src/components/section/Section404'
 import withNavFooter from '@/src/components/withNavFooter'
 import { GalleryCategoryIndex } from '@/src/themes/gallery/GalleryCategoryIndex'
 import { getCategoriesInfo } from '@/src/lib/blog/format/category'
-import { formatPosts } from '@/src/lib/blog/format/post'
+import { formatPosts, FORMAT_POST_LIST_OPTIONS } from '@/src/lib/blog/format/post'
 import { withNavFooterStaticProps } from '@/src/lib/blog/withNavFooterStaticProps'
 import { getPostsAndPieces } from '@/src/lib/notion/getBlogData'
 import { addSubTitle } from '@/src/lib/util'
@@ -34,7 +34,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     const pages = sharedPageStaticProps.props.navPages
     const page = pages.find((page) => page.slug === slug) ?? null
 
-    const formattedPosts = await formatPosts(posts)
+    const formattedPosts = await formatPosts(posts, FORMAT_POST_LIST_OPTIONS)
 
     const categories = getCategoriesInfo(formattedPosts)
 

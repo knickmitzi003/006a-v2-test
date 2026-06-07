@@ -1,7 +1,7 @@
 import CONFIG from '@/blog.config'
 import { GetStaticProps, GetStaticPropsContext, NextPage } from 'next'
 import withNavFooter from '../components/withNavFooter'
-import { formatPosts } from '../lib/blog/format/post'
+import { formatPosts, FORMAT_POST_LIST_OPTIONS } from '../lib/blog/format/post'
 import { loadHomeWidgets } from '../lib/blog/loadHomeWidgets'
 import { withNavFooterStaticProps } from '../lib/blog/withNavFooterStaticProps'
 import { buildHomeFeedPosts } from '../lib/blog/postLimits'
@@ -38,7 +38,9 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
   ) => {
     try {
       const postsRaw = await getPosts(ApiScope.Archive)
-      let allFormattedPosts = buildHomeFeedPosts(await formatPosts(postsRaw))
+      let allFormattedPosts = buildHomeFeedPosts(
+        await formatPosts(postsRaw, FORMAT_POST_LIST_OPTIONS)
+      )
 
       if (!allFormattedPosts || allFormattedPosts.length === 0) {
         const backupPosts = (sharedPageStaticProps.props.navPages as unknown as { type?: string; slug?: string }[]) || []

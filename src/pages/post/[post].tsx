@@ -25,26 +25,30 @@ import {
 } from '@/src/lib/gallery/loadGalleryAdBanner'
 import { resolveActiveTheme } from '@/src/themes/getActiveTheme'
 import { formatBlocks } from '../../lib/blog/format/block'
-import { formatPosts, getNavigationInfo } from '../../lib/blog/format/post'
+import { formatPosts, FORMAT_POST_LIST_OPTIONS, getNavigationInfo } from '../../lib/blog/format/post'
+import { getArchiveNavPosts } from '../../lib/blog/archiveNavCache'
 import { withNavFooterStaticProps } from '../../lib/blog/withNavFooterStaticProps'
 import { getAllBlocks } from '../../lib/notion/getBlocks'
-import { buildStaticPostPaths } from '../../lib/blog/postLimits'
-import { getPosts } from '../../lib/notion/getBlogData'
+import {
+  BLOG_STATIC_POST_PATHS_MAX,
+  buildStaticPostPaths,
+  onDemandStaticPaths,
+} from '../../lib/blog/postLimits'
+import { getPostBySlug, getPosts } from '../../lib/notion/getBlogData'
 import { addSubTitle } from '../../lib/util'
 import { NextPageWithLayout, Page, PartialPost, Post, SharedNavFooterStaticProps } from '../../types/blog'
 import { ApiScope, BlockResponse } from '../../types/notion'
 
 export const getStaticPaths = async () => {
+  if (!BLOG_STATIC_POST_PATHS_MAX || BLOG_STATIC_POST_PATHS_MAX <= 0) {
+    return onDemandStaticPaths
+  }
   const postsRaw = await getPosts(ApiScope.Archive)
-  const formattedPosts = await formatPosts(postsRaw, { skipImageProbe: true })
+  const formattedPosts = await formatPosts(postsRaw, FORMAT_POST_LIST_OPTIONS)
   const paths = buildStaticPostPaths(formattedPosts).map((post) => ({
     params: { post: post.slug },
   }))
-
-  return {
-    paths,
-    fallback: 'blocking',
-  }
+  return { paths, fallback: 'blocking' as const }
 }
 
 export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
@@ -58,34 +62,41 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     }
 
     try {
-      const postsRaw = await getPosts(ApiScope.Archive)
-      const allFormattedPosts = await formatPosts(postsRaw, {
-        skipImageProbe: true,
-      })
-      const rawPost = postsRaw.find(
-        (p) =>
-          p.properties.slug?.type === 'rich_text' &&
-          p.properties.slug.rich_text[0]?.plain_text === slug
-      )
+      const [rawPost, activeTheme] = await Promise.all([
+        getPostBySlug(slug, ApiScope.Archive),
+        resolveActiveTheme(),
+      ])
       if (!rawPost) return { notFound: true }
 
-      const post = await formatPosts([rawPost])
-      const postForPage = post[0]
+      const postForPage = (
+        await formatPosts([rawPost], FORMAT_POST_LIST_OPTIONS)
+      )[0]
 
-      addSubTitle(sharedPageStaticProps.props, '', { text: postForPage.title, color: 'gray', slug: postForPage.slug }, false)
-      const { previousPost, nextPost } = getNavigationInfo(allFormattedPosts, postForPage)
-      const statsMap = await getAllPostStatsMap()
-      const postStats = await getPostStats(slug)
-      const recommendations = buildGalleryRecommendations(
-        postForPage,
-        allFormattedPosts,
-        undefined,
-        statsMap
+      addSubTitle(
+        sharedPageStaticProps.props,
+        '',
+        { text: postForPage.title, color: 'gray', slug: postForPage.slug },
+        false
       )
+
+      const navPosts = await getArchiveNavPosts()
+      const { previousPost, nextPost } = getNavigationInfo(navPosts, postForPage)
+
+      const postStats = await getPostStats(slug)
+      let recommendations: GalleryRecommendPost[] = []
+      if (activeTheme === 'gallery') {
+        const statsMap = await getAllPostStatsMap()
+        recommendations = buildGalleryRecommendations(
+          postForPage,
+          navPosts,
+          undefined,
+          statsMap
+        )
+      }
+
       const blocks = await getAllBlocks(postForPage.id)
       const formattedBlocks = await formatBlocks(blocks)
 
-      const activeTheme = await resolveActiveTheme()
       const galleryAdBanner =
         activeTheme === 'gallery' ? await loadGalleryAdBanner() : null
 
@@ -112,7 +123,15 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
         revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
       }
     } catch (error) {
-      console.error("🛡️ Render Error Bypass:", error)
+      console.error('Post page render error:', error)
+      const message = error instanceof Error ? error.message : String(error)
+      const isTransient =
+        /ECONNRESET|ETIMEDOUT|ENOTFOUND|429|502|503|504|fetch failed|network/i.test(
+          message
+        )
+      if (isTransient) {
+        throw error
+      }
       return { notFound: true }
     }
   }

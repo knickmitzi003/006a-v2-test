@@ -6,7 +6,7 @@ import { Section404 } from '@/src/components/section/Section404'
 import { TagsCollection } from '@/src/components/section/TagsCollection'
 import withNavFooter from '@/src/components/withNavFooter'
 import { GalleryTagIndex } from '@/src/themes/gallery/GalleryTagIndex'
-import { formatPosts } from '@/src/lib/blog/format/post'
+import { formatPosts, FORMAT_POST_LIST_OPTIONS } from '@/src/lib/blog/format/post'
 import { getTagsInfo } from '@/src/lib/blog/format/tag'
 import { withNavFooterStaticProps } from '@/src/lib/blog/withNavFooterStaticProps'
 import { getPostsAndPieces } from '@/src/lib/notion/getBlogData'
@@ -32,7 +32,7 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     const { posts } = await getPostsAndPieces(ApiScope.Archive)
     const pages = sharedPageStaticProps.props.navPages
     const page = pages.find((page) => page.slug === slug) ?? null
-    const formattedPosts = await formatPosts(posts)
+    const formattedPosts = await formatPosts(posts, FORMAT_POST_LIST_OPTIONS)
     const tags = getTagsInfo(formattedPosts)
 
     return {

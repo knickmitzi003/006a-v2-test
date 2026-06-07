@@ -1,27 +1,74 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import {
+  encodeAdminAuthCookie,
+  getAdminCredentials,
+  isLegacyUrlPasswordDisabled,
+  verifyAdminLoginToken,
+} from '@/src/lib/admin/loginToken'
 
-export function middleware(req: NextRequest) {
+function credentialsMatch(user: string, pass: string): boolean {
+  const { user: validUser, pass: validPass } = getAdminCredentials()
+  return user === validUser && pass === validPass
+}
+
+function setAdminSessionCookie(response: NextResponse, user: string, pass: string) {
+  response.cookies.set('internal_auth', encodeAdminAuthCookie(user, pass), {
+    path: '/',
+    maxAge: 86400,
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  })
+}
+
+function redirectToAdminWithoutLoginQuery(req: NextRequest): NextResponse {
+  const url = req.nextUrl.clone()
+  url.pathname = '/admin'
+  url.searchParams.delete('login_token')
+  url.searchParams.delete('auth_u')
+  url.searchParams.delete('auth_p')
+  return NextResponse.redirect(url)
+}
+
+function unauthorized(): NextResponse {
+  return new NextResponse(null, {
+    status: 401,
+    headers: {
+      'WWW-Authenticate': 'Basic realm="Secure Area"',
+    },
+  })
+}
+
+export async function middleware(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl
 
-  // 只针对 /admin 路径
   if (pathname.startsWith('/admin')) {
-    const auth_u = searchParams.get('auth_u')
-    const auth_p = searchParams.get('auth_p')
+    const loginToken = searchParams.get('login_token')
 
-    const validUser = process.env.AUTH_USER || 'admin'
-    const validPass = process.env.AUTH_PASS || '123456'
+    if (loginToken) {
+      const result = await verifyAdminLoginToken(loginToken, req.nextUrl.host)
+      if (!result.ok) {
+        console.warn('admin login_token rejected:', result.reason)
+        return unauthorized()
+      }
 
-    if (auth_u === validUser && auth_p === validPass) {
-      const response = NextResponse.redirect(new URL('/admin', req.url))
-      const authValue = btoa(`${validUser}:${validPass}`)
-
-      response.cookies.set('internal_auth', authValue, {
-        path: '/',
-        maxAge: 86400,
-        httpOnly: true,
-      })
+      const { user, pass } = getAdminCredentials()
+      const response = redirectToAdminWithoutLoginQuery(req)
+      setAdminSessionCookie(response, user, pass)
       return response
+    }
+
+    if (!isLegacyUrlPasswordDisabled()) {
+      const auth_u = searchParams.get('auth_u')
+      const auth_p = searchParams.get('auth_p')
+
+      if (auth_u && auth_p && credentialsMatch(auth_u, auth_p)) {
+        const { user, pass } = getAdminCredentials()
+        const response = redirectToAdminWithoutLoginQuery(req)
+        setAdminSessionCookie(response, user, pass)
+        return response
+      }
     }
 
     const basicAuth = req.headers.get('authorization')
@@ -29,21 +76,18 @@ export function middleware(req: NextRequest) {
 
     if (basicAuth) {
       const authValue = basicAuth.split(' ')[1]
-      const [user, pwd] = atob(authValue).split(':')
-      if (user === validUser && pwd === validPass) return NextResponse.next()
+      if (authValue) {
+        const [user, pwd] = atob(authValue).split(':')
+        if (credentialsMatch(user, pwd)) return NextResponse.next()
+      }
     }
 
     if (cookieAuth) {
       const [user, pwd] = atob(cookieAuth).split(':')
-      if (user === validUser && pwd === validPass) return NextResponse.next()
+      if (credentialsMatch(user, pwd)) return NextResponse.next()
     }
 
-    return new NextResponse(null, {
-      status: 401,
-      headers: {
-        'WWW-Authenticate': 'Basic realm="Secure Area"',
-      },
-    })
+    return unauthorized()
   }
 
   return NextResponse.next()

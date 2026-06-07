@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import {
   clearContentBuildCaches,
   collectAllRevalidatePaths,
+  collectShellRevalidatePaths,
   revalidateMany,
 } from '@/src/lib/blog/contentRevalidation'
 
@@ -62,9 +63,9 @@ export default async function handler(
     const scope = readScope(req)
     const paths =
       explicitPaths ??
-      (scope === 'full' || !explicitPaths
+      (scope === 'full'
         ? await collectAllRevalidatePaths()
-        : ['/'])
+        : collectShellRevalidatePaths())
 
     const results = await revalidateMany(res, paths)
     const failed = results.filter((item) => !item.ok)

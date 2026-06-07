@@ -15,6 +15,11 @@ interface BlogConfig {
   }
   // 归档页每页显示的数量
   ARCHIVE_PER_COUNT: number
+  /**
+   * 构建时预渲染的文章路径数。0 = 不预渲染 /post/*（推荐 SaaS：靠 fallback + 保存后刷新）。
+   * 可设为 20 等以预热热门页，但不建议全量。
+   */
+  STATIC_POST_PATHS_MAX?: number
   // public 下图标目录
   ICON_PATH: string
   // 默认特殊页面对应的 slug
@@ -88,7 +93,7 @@ const CONFIG: BlogConfig = {
   NOTION_PAGE_ID: process.env.NOTION_PAGE_ID || process.env.NOTION_DATABASE_ID || '',
   
   NOTION_SITE_NAME: 'anzifan',
-  NEXT_REVALIDATE_SECONDS: 60,
+  NEXT_REVALIDATE_SECONDS: Number(process.env.NEXT_REVALIDATE_SECONDS) || 3600,
   FORCE_UPDATE_TIME: 1620000000000,
   DEFAULT_POST_COVER:
     'https://img.x1file.top/disk_r/2026/05/31/6a1bf12f468b6.jpg',
@@ -100,6 +105,7 @@ const CONFIG: BlogConfig = {
     MORE: 6,
   },
   ARCHIVE_PER_COUNT: 10,
+  STATIC_POST_PATHS_MAX: 0,
   ICON_PATH: '/icons',
   DEFAULT_SPECIAL_PAGES: {
     TAG: 'tag',

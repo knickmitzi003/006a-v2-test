@@ -2,7 +2,11 @@ import { slugify } from '@/src/lib/util'
 import {
   clearContentBuildCaches,
   collectAllRevalidatePaths,
+  collectDeleteRevalidatePaths,
+  collectGalleryAdRevalidatePaths,
+  collectPageRevalidatePaths,
   collectPostRevalidatePaths,
+  collectShellRevalidatePaths,
   revalidateMany,
 } from '@/src/lib/blog/contentRevalidation'
 
@@ -30,24 +34,24 @@ export default async function handler(req, res) {
       category,
       tags,
       previousSlug,
-      listScope = 'full',
+      listScope = 'shell',
       paths: explicitPaths,
       clearCaches = true,
       freshTheme = false,
     } = req.body ?? {}
 
     if (scope === 'list') {
-      const paths =
-        listScope === 'full' ? await collectAllRevalidatePaths() : []
+      let paths = []
+      if (listScope === 'full') {
+        paths = await collectAllRevalidatePaths()
+      } else if (listScope === 'shell') {
+        paths = collectShellRevalidatePaths()
+      }
       return res.status(200).json({
         success: true,
         paths,
         total: paths.length,
       })
-    }
-
-    if (clearCaches) {
-      clearContentBuildCaches()
     }
 
     const categoryId = category?.trim() ? slugify(category.trim()) : null
@@ -58,6 +62,14 @@ export default async function handler(req, res) {
       paths = Array.isArray(explicitPaths) ? explicitPaths : []
     } else if (scope === 'full') {
       paths = await collectAllRevalidatePaths()
+    } else if (scope === 'shell') {
+      paths = collectShellRevalidatePaths()
+    } else if (scope === 'gallery-ad') {
+      paths = await collectGalleryAdRevalidatePaths()
+    } else if (scope === 'delete' && slug) {
+      paths = await collectDeleteRevalidatePaths(slug, { categoryId, tagIds })
+    } else if (scope === 'page' && slug) {
+      paths = collectPageRevalidatePaths(slug, { previousSlug })
     } else if (scope === 'friends') {
       paths = ['/', '/friends']
     } else if (scope === 'widget') {
@@ -69,10 +81,17 @@ export default async function handler(req, res) {
         previousSlug,
       })
     } else {
-      paths = await collectAllRevalidatePaths()
+      paths = collectShellRevalidatePaths()
     }
 
-    const results = await revalidateMany(res, paths, { freshTheme })
+    if (clearCaches && scope !== 'batch') {
+      clearContentBuildCaches()
+    }
+
+    const results = await revalidateMany(res, paths, {
+      freshTheme,
+      clearCaches: scope === 'batch' ? clearCaches : false,
+    })
     const failed = results.filter((item) => !item.ok)
     const succeeded = results.filter((item) => item.ok)
 
@@ -81,6 +100,7 @@ export default async function handler(req, res) {
       total: results.length,
       succeeded: succeeded.length,
       failed: failed.length,
+      paths,
       results,
     })
   } catch (error) {

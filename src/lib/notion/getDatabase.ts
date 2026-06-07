@@ -8,7 +8,7 @@ import {
   QueryDatabaseResponse,
   RichTextItemResponse,
 } from '@notionhq/client/build/src/api-endpoints'
-import { ApiScope } from './../../types/notion'
+import { ApiFilter, ApiScope } from './../../types/notion'
 import { filterSwitch } from './filter'
 import { databaseId, notion } from './notion'
 
@@ -58,6 +58,44 @@ export const getDatabase = async (
   }))
 
   return response
+}
+
+type QuerySort =
+  | { property: string; direction: 'ascending' | 'descending' }
+  | { timestamp: 'created_time' | 'last_edited_time'; direction: 'ascending' | 'descending' }
+
+/** 带自定义 filter 的分页查询（slug 单查等场景，避免拉全库） */
+export const queryDatabasePages = async (
+  filter: ApiFilter,
+  options?: {
+    sorts?: QuerySort[]
+    pageSize?: number
+    databaseId?: string
+  }
+): Promise<PageObjectResponse[]> => {
+  const objects: PageObjectResponse[] = []
+  let cursor: string | undefined
+  const maxResults = options?.pageSize
+  const targetDb = options?.databaseId ?? databaseId
+
+  do {
+    const response = await withRetry(() =>
+      notion.databases.query({
+        database_id: targetDb,
+        filter,
+        sorts: options?.sorts ?? [{ property: 'date', direction: 'descending' }],
+        start_cursor: cursor,
+        page_size: maxResults ? Math.min(maxResults, 100) : 100,
+      })
+    )
+    addObjects(response.results, objects)
+    cursor = response.next_cursor ?? undefined
+    if (maxResults && objects.length >= maxResults) {
+      return objects.slice(0, maxResults)
+    }
+  } while (cursor)
+
+  return objects
 }
 
 export const getAll = async (

@@ -1,5 +1,5 @@
 import { getAllCategories } from '@/src/lib/blog/format/category'
-import { formatPosts } from '@/src/lib/blog/format/post'
+import { formatPosts, FORMAT_POST_LIST_OPTIONS } from '@/src/lib/blog/format/post'
 import { BlogStats, FixedLengthArray } from '@/src/types/blog'
 import { ApiScope } from '@/src/types/notion'
 import { getPostsAndPieces } from '../notion/getBlogData'
@@ -11,7 +11,7 @@ export default async function getBlogStats(): Promise<BlogStats> {
   const postsNumber = posts.length
   const piecesNumber = pieces.length
 
-  const formattedPosts = await formatPosts(posts)
+  const formattedPosts = await formatPosts(posts, FORMAT_POST_LIST_OPTIONS)
   const tagsNumber = getAllTags(formattedPosts).length
   const categoriesNumber = getAllCategories(formattedPosts).length
 

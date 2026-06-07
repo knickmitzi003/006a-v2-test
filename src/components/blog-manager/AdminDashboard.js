@@ -25,7 +25,7 @@ import {
   serializeBlocksForSave,
 } from '@/src/lib/admin/contentMediaFlush';
 
-async function triggerContentRevalidation(payload = { scope: 'full' }) {
+async function triggerContentRevalidation(payload = {}) {
   try {
     const res = await fetch('/api/admin/revalidate', {
       method: 'POST',
@@ -33,33 +33,85 @@ async function triggerContentRevalidation(payload = { scope: 'full' }) {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (!res.ok || data.success === false) {
-      console.warn('页面增量刷新部分失败', data);
-    }
-    return data;
+    return {
+      ok: res.ok && data.success !== false,
+      data,
+      succeeded: typeof data.succeeded === 'number' ? data.succeeded : null,
+      failed: typeof data.failed === 'number' ? data.failed : null,
+      total: typeof data.total === 'number' ? data.total : null,
+    };
   } catch (e) {
     console.warn('页面增量刷新请求失败', e);
-    return null;
+    return { ok: false, data: null, succeeded: 0, failed: 0, total: 0 };
   }
 }
 
-const THEME_REVALIDATE_BATCH_SIZE = 1;
+function showRevalidateFeedback(result, showAdminToastFn) {
+  if (!result || !showAdminToastFn) return;
+  const { ok, succeeded, failed, total } = result;
+  if (ok && (failed === 0 || failed === null)) {
+    showAdminToastFn(
+      total != null && succeeded != null
+        ? `前台已更新 ${succeeded} 个页面`
+        : '前台页面已更新'
+    );
+    return;
+  }
+  if (succeeded != null && failed != null && failed > 0) {
+    showAdminToastFn(`部分页面更新失败（${failed}/${total ?? succeeded + failed}）`);
+    return;
+  }
+  if (!ok) {
+    showAdminToastFn('前台更新未完成，请稍后重试');
+  }
+}
 
-/** 主题切换：分批刷新全站，返回真实进度 */
-async function runThemeRevalidation(onProgress) {
-  onProgress({
-    step: 2,
-    totalSteps: 3,
-    label: '正在统计需要更新的页面…',
-    done: 0,
-    total: 0,
-    hint: '正在读取站点页面列表',
-  });
+const SPECIAL_PAGE_SLUGS = new Set(['announcement', 'about', 'download', 'theme-config']);
+
+function resolveSaveRevalidateScope(type, slug) {
+  if (type === 'Widget') {
+    return slug === 'gallery-ad' ? 'gallery-ad' : 'widget';
+  }
+  if (type === 'Page' || SPECIAL_PAGE_SLUGS.has(slug)) {
+    return 'page';
+  }
+  return 'post';
+}
+
+const REVALIDATE_BATCH_SIZE = 12;
+
+/** 分批按需刷新，避免单次 Serverless 超时并降低峰值 CPU */
+async function runBatchedRevalidation(options = {}) {
+  const {
+    freshTheme = false,
+    listScope = 'shell',
+    onProgress,
+    progressLabels = {},
+  } = options;
+  const {
+    listing = '正在统计需要更新的页面…',
+    running = '',
+    doneOk = '更新完成',
+    donePartial = '部分页面需稍后自动更新',
+    hintPartial = '个页面未能更新，可点右上角按钮重试',
+    hintOk = '前台页面已全部更新',
+  } = progressLabels;
+
+  if (onProgress) {
+    onProgress({
+      step: 2,
+      totalSteps: 3,
+      label: listing,
+      done: 0,
+      total: 0,
+      hint: '正在读取站点页面列表',
+    });
+  }
 
   const listRes = await fetch('/api/admin/revalidate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scope: 'list', listScope: 'full' }),
+    body: JSON.stringify({ scope: 'list', listScope: options.listScope || 'shell' }),
   });
   const listData = await listRes.json();
   if (!listRes.ok || !listData.success) {
@@ -71,66 +123,86 @@ async function runThemeRevalidation(onProgress) {
   let done = 0;
   let failedCount = 0;
 
-  onProgress({
-    step: 2,
-    totalSteps: 3,
-    label: '',
-    done: 0,
-    total,
-    hint: '',
-  });
+  if (onProgress) {
+    onProgress({
+      step: 2,
+      totalSteps: 3,
+      label: running,
+      done: 0,
+      total,
+      hint: '',
+    });
+  }
 
-  for (let i = 0; i < paths.length; i += THEME_REVALIDATE_BATCH_SIZE) {
-    const batch = paths.slice(i, i + THEME_REVALIDATE_BATCH_SIZE);
-
+  for (let i = 0; i < paths.length; i += REVALIDATE_BATCH_SIZE) {
+    const batch = paths.slice(i, i + REVALIDATE_BATCH_SIZE);
     const batchRes = await fetch('/api/admin/revalidate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         scope: 'batch',
         paths: batch,
-        clearCaches: true,
-        freshTheme: true,
+        clearCaches: i === 0,
+        freshTheme,
       }),
     });
     const batchData = await batchRes.json();
-    const batchOk = batchRes.ok && batchData.success !== false
+    const batchOk = batchRes.ok && batchData.success !== false;
     const batchSucceeded =
       typeof batchData.succeeded === 'number'
         ? batchData.succeeded
         : batchOk
           ? batch.length
-          : 0
+          : 0;
     const batchFailed =
       typeof batchData.failed === 'number'
         ? batchData.failed
         : batchOk
           ? 0
-          : batch.length
+          : batch.length;
 
-    failedCount += batchFailed
-    done += batchSucceeded
+    failedCount += batchFailed;
+    done += batchSucceeded;
 
+    if (onProgress) {
+      onProgress({
+        step: 2,
+        totalSteps: 3,
+        label: running,
+        done,
+        total,
+        hint: '',
+      });
+    }
+  }
+
+  if (onProgress) {
     onProgress({
-      step: 2,
+      step: 3,
       totalSteps: 3,
-      label: '',
-      done,
+      label: failedCount > 0 ? donePartial : doneOk,
+      done: total,
       total,
-      hint: '',
+      hint: failedCount > 0 ? `${failedCount} ${hintPartial}` : hintOk,
     });
   }
 
-  onProgress({
-    step: 3,
-    totalSteps: 3,
-    label: failedCount > 0 ? '主题已切换，部分页面需稍后自动更新' : '主题切换完成',
-    done: total,
-    total,
-    hint: failedCount > 0 ? `${failedCount} 个页面未能更新，可点右上角按钮重试` : '前台页面已全部更新',
-  });
-
   return { total, failed: failedCount, succeeded: done };
+}
+
+/** 主题切换：刷新壳层列表页（文章内页随访问按需更新） */
+async function runThemeRevalidation(onProgress) {
+  return runBatchedRevalidation({
+    freshTheme: true,
+    listScope: 'shell',
+    onProgress,
+    progressLabels: {
+      doneOk: '主题切换完成',
+      donePartial: '主题已切换，部分列表页需稍后自动更新',
+      hintOk: '首页与列表已更新；文章内页将在 1 小时内逐步完成',
+      hintPartial: '个列表页未能及时更新，可稍后重试或打开单篇文章查看',
+    },
+  });
 }
 
 // ================= 1. 图标库 =================
@@ -856,7 +928,9 @@ const ThemeSwitchDoneModal = ({ open, closing, extraNote, onClose }) => {
         <div className="cover-modal-icon" aria-hidden>🎨</div>
         <h3 id="theme-done-modal-title" className="cover-modal-title">主题切换完成</h3>
         <p className="cover-modal-desc">
-          BLOG 可能还需等待几分钟才能全部生效，也可点击右上角刷新按钮清除旧主题。
+          BLOG主题已切换。
+          <br /><br />
+          各篇<strong>内页</strong>会逐步完成更新，全站完整更新通常需要 <strong>1 小时</strong>。如需立即查看某篇内页样式更新效果，在BLOG直接打开该篇内页刷新即可。
           {extraNote ? (
             <>
               <br /><br />
@@ -1854,7 +1928,7 @@ const [mounted, setMounted] = useState(false);
 
       openThemeDoneModal(
         refreshResult.failed > 0
-          ? `另有 ${refreshResult.failed} 个页面未能及时更新，建议点击右上角刷新按钮重试。`
+          ? `另有 ${refreshResult.failed} 个列表页未能及时更新，不影响已保存的主题设置；内页仍会在访问后或 1 小时内自动切换。`
           : ''
       );
     } catch (err) {
@@ -2085,7 +2159,9 @@ const [mounted, setMounted] = useState(false);
         alert('✓ 广告位已保存');
         await loadGalleryAd();
         await fetchPosts();
-        await triggerContentRevalidation({ scope: 'widget' });
+        await triggerContentRevalidation({ scope: 'gallery-ad' }).then((rev) =>
+          showRevalidateFeedback(rev, showAdminToast)
+        );
       }
       else alert('保存失败：' + (d.error || '未知错误'));
     } catch (e) { alert('保存失败：' + e.message); }
@@ -2101,7 +2177,9 @@ const [mounted, setMounted] = useState(false);
         setGalleryAd({ id: null, url: '', promoText: '', cover: '' });
         alert('✓ 广告位已清空');
         await fetchPosts();
-        await triggerContentRevalidation({ scope: 'widget' });
+        await triggerContentRevalidation({ scope: 'gallery-ad' }).then((rev) =>
+          showRevalidateFeedback(rev, showAdminToast)
+        );
       } else alert('清空失败：' + (d.error || '未知错误'));
     } catch (e) { alert('清空失败：' + e.message); }
     finally { setGalleryAdSaving(false); }
@@ -2189,7 +2267,10 @@ const [mounted, setMounted] = useState(false);
           alert("✅ 保存成功！");
           setView('list');
           fetchPosts();
-          await triggerContentRevalidation({ scope: 'widget' });
+          await triggerContentRevalidation({
+            scope: resolveSaveRevalidateScope('Widget', form.slug),
+            slug: form.slug,
+          }).then((rev) => showRevalidateFeedback(rev, showAdminToast));
         }
       } catch (e) { alert('网络错误: ' + e.message); }
       finally { setLoading(false); }
@@ -2278,6 +2359,18 @@ const [mounted, setMounted] = useState(false);
             setGalleryDirty(false);
           } catch (e) {
             alert(`✅ 文章已保存，但图库上传失败：\n\n${e.message}\n\n请留在本页重试保存。`);
+            try {
+              const rev = await triggerContentRevalidation({
+                scope: resolveSaveRevalidateScope(form.type || 'Post', form.slug),
+                slug: form.slug,
+                category: form.category || '',
+                tags: form.tags || '',
+                previousSlug: editingSlugRef.current,
+              });
+              showRevalidateFeedback(rev, showAdminToast);
+            } catch (revalidateErr) {
+              console.warn('图库失败后的页面刷新失败', revalidateErr);
+            }
             return;
           }
         }
@@ -2291,15 +2384,17 @@ const [mounted, setMounted] = useState(false);
         loadGalleryStorage();
 
         try {
-          await triggerContentRevalidation({
-            scope: form.type === 'Page' ? 'full' : 'post',
+          const rev = await triggerContentRevalidation({
+            scope: resolveSaveRevalidateScope(form.type || 'Post', form.slug),
             slug: form.slug,
             category: form.category || '',
             tags: form.tags || '',
             previousSlug,
           });
+          showRevalidateFeedback(rev, showAdminToast);
         } catch (revalidateErr) {
           console.warn('页面增量刷新失败（文章已保存）', revalidateErr);
+          showAdminToast('文章已保存，但前台更新未完成');
         }
       }
     } catch (e) {
@@ -2317,18 +2412,20 @@ const [mounted, setMounted] = useState(false);
         setLoading(true);
         await fetch('/api/admin/config', { method: 'POST', body: JSON.stringify({ title: newTitle }) });
         setSiteTitle(newTitle);
-        await triggerContentRevalidation({ scope: 'full' });
+        const rev = await triggerContentRevalidation({ scope: 'shell' });
+        showRevalidateFeedback(rev, showAdminToast);
         setLoading(false);
     }
   };
 
   const handleManualDeploy = () => {
     if (isThemeLoading) return;
-    showAdminToast('开始执行全站更新');
+    showAdminToast('正在更新首页与列表页');
     if (silentRefreshRef.current) return;
     silentRefreshRef.current = true;
-    triggerContentRevalidation({ scope: 'full', freshTheme: true })
-      .catch((e) => console.warn('全站静默更新失败', e))
+    triggerContentRevalidation({ scope: 'shell', clearCaches: true })
+      .then((rev) => showRevalidateFeedback(rev, showAdminToast))
+      .catch((e) => console.warn('列表页更新失败', e))
       .finally(() => { silentRefreshRef.current = false; });
   };
 
@@ -2366,10 +2463,35 @@ const [mounted, setMounted] = useState(false);
       if (!d.success) alert(d.error || '置顶操作失败');
       else {
         await fetchPosts();
-        await triggerContentRevalidation({ scope: 'post', slug: p.slug });
+        await triggerContentRevalidation({ scope: 'post', slug: p.slug, category: p.category || '', tags: p.tags || '' })
+          .then((rev) => showRevalidateFeedback(rev, showAdminToast));
       }
     } catch (err) {
       alert(err.message || '置顶操作失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeletePost = async (p) => {
+    if (!confirm('彻底删除？')) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/post?id=' + p.id, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || '删除失败');
+      }
+      await fetchPosts();
+      const rev = await triggerContentRevalidation({
+        scope: 'delete',
+        slug: p.slug,
+        category: p.category || '',
+        tags: p.tags || '',
+      });
+      showRevalidateFeedback(rev, showAdminToast);
+    } catch (e) {
+      alert('删除失败：' + (e.message || '未知错误'));
     } finally {
       setLoading(false);
     }
@@ -2388,7 +2510,7 @@ const [mounted, setMounted] = useState(false);
         </div>
       ) : null}
       <div onClick={(e) => { e.stopPropagation(); handleEdit(p); }} style={{ background: 'greenyellow', color: '#000' }} className="dr-btn"><Icons.Edit /></div>
-      <div onClick={(e) => { e.stopPropagation(); if (confirm('彻底删除？')) { setLoading(true); fetch('/api/admin/post?id=' + p.id, { method: 'DELETE' }).then(() => fetchPosts()); } }} style={{ background: '#ff4d4f' }} className="dr-btn"><Icons.Trash /></div>
+      <div onClick={(e) => { e.stopPropagation(); handleDeletePost(p); }} style={{ background: '#ff4d4f' }} className="dr-btn"><Icons.Trash /></div>
     </div>
   );
 
@@ -2499,7 +2621,7 @@ const [mounted, setMounted] = useState(false);
            
            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
              {/* 🟢 修复：更新按钮 */}
-             <button onClick={handleManualDeploy} style={{background:'#424242', border:'1px solid greenyellow', padding:'10px', borderRadius:'8px', color:'greenyellow', cursor:'pointer'}} title="立即更新全站前台页面">
+             <button onClick={handleManualDeploy} style={{background:'#424242', border:'1px solid greenyellow', padding:'10px', borderRadius:'8px', color:'greenyellow', cursor:'pointer'}} title="更新首页、归档与分类/标签列表（不重建全部文章页）">
                <Icons.Refresh />
              </button>
              {view === 'list' ? <AnimatedBtn text="发布新内容" onClick={handleCreate} /> : <AnimatedBtn text="返回列表" onClick={leaveEditView} />}

@@ -9,11 +9,15 @@ import PostMessage from '@/src/components/post/PostMessage'
 import { Section404 } from '@/src/components/section/Section404'
 import withNavFooter from '@/src/components/withNavFooter'
 import { formatBlocks } from '@/src/lib/blog/format/block'
-import { formatPosts } from '@/src/lib/blog/format/post'
+import { formatPosts, FORMAT_POST_LIST_OPTIONS } from '@/src/lib/blog/format/post'
 import { withNavFooterStaticProps } from '@/src/lib/blog/withNavFooterStaticProps'
 import { getAllBlocks } from '@/src/lib/notion/getBlocks'
-import { buildStaticPostPaths } from '@/src/lib/blog/postLimits'
-import { getPosts } from '@/src/lib/notion/getBlogData'
+import {
+  BLOG_STATIC_POST_PATHS_MAX,
+  buildStaticPostPaths,
+  onDemandStaticPaths,
+} from '@/src/lib/blog/postLimits'
+import { getPostBySlug, getPosts } from '@/src/lib/notion/getBlogData'
 import { addSubTitle } from '@/src/lib/util'
 import {
   NextPageWithLayout,
@@ -24,17 +28,15 @@ import { ApiScope, BlockResponse } from '@/src/types/notion'
 import { GetStaticPropsContext, NextPage } from 'next'
 
 export const getStaticPaths = async () => {
-  const posts = await getPosts(ApiScope.Draft)
-  const formattedPosts = await formatPosts(posts)
-  const paths = buildStaticPostPaths(formattedPosts).map((post) => ({
-    params: {
-      post: post.slug,
-    },
-  }))
-  return {
-    paths,
-    fallback: 'blocking',
+  if (!BLOG_STATIC_POST_PATHS_MAX || BLOG_STATIC_POST_PATHS_MAX <= 0) {
+    return onDemandStaticPaths
   }
+  const posts = await getPosts(ApiScope.Draft)
+  const formattedPosts = await formatPosts(posts, FORMAT_POST_LIST_OPTIONS)
+  const paths = buildStaticPostPaths(formattedPosts).map((post) => ({
+    params: { post: post.slug },
+  }))
+  return { paths, fallback: 'blocking' as const }
 }
 
 export const getStaticProps = withNavFooterStaticProps(
@@ -42,13 +44,19 @@ export const getStaticProps = withNavFooterStaticProps(
     context: GetStaticPropsContext,
     sharedPageStaticProps: SharedNavFooterStaticProps
   ) => {
-    const posts = await getPosts(ApiScope.Draft)
-    const formattedPosts = await formatPosts(posts)
-    const post = formattedPosts.find(
-      (post) => post.slug === context.params?.post
-    )
+    const slug = context.params?.post as string
+    const rawPost = slug
+      ? await getPostBySlug(slug, ApiScope.Draft)
+      : null
 
     let blocks: BlockResponse[] = []
+    let post: Post | null = null
+
+    if (rawPost) {
+      const formatted = await formatPosts([rawPost], FORMAT_POST_LIST_OPTIONS)
+      post = formatted[0] ?? null
+    }
+
     if (post) {
       blocks = await getAllBlocks(post.id)
       addSubTitle(sharedPageStaticProps.props, '', {

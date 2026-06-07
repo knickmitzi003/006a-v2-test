@@ -1,4 +1,5 @@
 import CONFIG from '@/blog.config'
+import { buildArchivePageProps } from '@/src/lib/blog/buildArchiveFeed'
 import { ArchiveFilter } from '@/src/components/ArchiveFilter'
 import { Empty } from '@/src/components/Empty'
 import { LargeTitle } from '@/src/components/LargeTitle'
@@ -8,15 +9,10 @@ import { ArchiveCollection } from '@/src/components/section/ArchiveCollection'
 import { PaginationSection } from '@/src/components/section/PaginationSection'
 import { Section404 } from '@/src/components/section/Section404'
 import withNavFooter from '@/src/components/withNavFooter'
-import {
-  getAllCategories,
-  initialCategory,
-} from '@/src/lib/blog/format/category'
-import { formatPosts } from '@/src/lib/blog/format/post'
-import { getAllTags, initialTag } from '@/src/lib/blog/format/tag'
+import { initialCategory } from '@/src/lib/blog/format/category'
+import { initialTag } from '@/src/lib/blog/format/tag'
 import { withNavFooterStaticProps } from '@/src/lib/blog/withNavFooterStaticProps'
-import { getPostsAndPieces } from '@/src/lib/notion/getBlogData'
-import { addSubTitle, createTagCategoryMap } from '@/src/lib/util'
+import { addSubTitle } from '@/src/lib/util'
 import {
   Category,
   NextPageWithLayout,
@@ -25,13 +21,11 @@ import {
   SharedNavFooterStaticProps,
   Tag,
 } from '@/src/types/blog'
-import { ApiScope } from '@/src/types/notion'
 import { GetStaticProps, GetStaticPropsContext, NextPage } from 'next'
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 
 const { ARCHIVE } = CONFIG.DEFAULT_SPECIAL_PAGES
-const PER_COUNT = CONFIG.ARCHIVE_PER_COUNT
 
 export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
   async (
@@ -41,33 +35,16 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     const slug = ARCHIVE
 
     addSubTitle(sharedPageStaticProps.props, slug)
-    const { posts, pieces } = await getPostsAndPieces(ApiScope.Archive)
     const pages = sharedPageStaticProps.props.navPages
     const page = pages.find((page) => page.slug === slug) ?? null
-    const preFormattedPosts = await formatPosts([...posts, ...pieces], {
-      skipImageProbe: true,
-    })
-    const formattedPosts = preFormattedPosts.sort(
-      (a, b) =>
-        Number(new Date(b.date.created)) - Number(new Date(a.date.created))
-    )
-    const tags = getAllTags(formattedPosts)
-    const categories = getAllCategories(formattedPosts)
-    const { tagCategoryMapById, categoryTagMapById } =
-      createTagCategoryMap(formattedPosts)
-    const contentCount = formattedPosts.length
-    const pageCount = Math.ceil(contentCount / PER_COUNT)
+    const archiveData = await buildArchivePageProps(1)
 
     return {
       props: {
         ...sharedPageStaticProps.props,
         page,
-        items: formattedPosts,
-        tags,
-        categories,
-        pageCount,
-        tagCategoryMapById,
-        categoryTagMapById,
+        ...archiveData,
+        currentPage: 1,
       },
       revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
     }
@@ -82,6 +59,7 @@ const Archive: NextPage<{
   pageCount: number
   tagCategoryMapById: Record<string, string[]>
   categoryTagMapById: Record<string, string[]>
+  currentPage: number
 }> = ({
   page,
   items,
@@ -90,11 +68,13 @@ const Archive: NextPage<{
   pageCount,
   tagCategoryMapById,
   categoryTagMapById,
+  currentPage,
 }) => {
   const router = useRouter()
   const [pageCountAfterFilter, setPageCountAfterFilter] = useState(pageCount)
   const [currentQuery, setCurrentQuery] = useState({})
   const [itemsAfterFilter, setItemsAfterFilter] = useState(items)
+  const [filterLoading, setFilterLoading] = useState(false)
 
   useEffect(() => {
     if (router.query && currentQuery !== router.query) {
@@ -103,30 +83,42 @@ const Archive: NextPage<{
   }, [currentQuery, router.query])
 
   useEffect(() => {
-    const tag = router.query.tag as string
-    const category = router.query.category as string
-    if (tag !== initialTag.id || category !== initialCategory.id) {
-      const filteredItems = items.filter((item) => {
-        if (
-          tag &&
-          tag !== initialTag.id &&
-          !item.tags.map((tag) => tag.id).includes(tag)
-        )
-          return false
-        if (
-          category &&
-          category !== initialCategory.id &&
-          item.category.id !== category
-        )
-          return false
-        return true
-      })
-      setItemsAfterFilter(filteredItems)
-      setPageCountAfterFilter(
-        Math.ceil(filteredItems.length / CONFIG.ARCHIVE_PER_COUNT)
-      )
+    setItemsAfterFilter(items)
+    setPageCountAfterFilter(pageCount)
+  }, [items, pageCount])
+
+  useEffect(() => {
+    const tag = (router.query.tag as string) || initialTag.id
+    const category = (router.query.category as string) || initialCategory.id
+    const hasFilter =
+      tag !== initialTag.id || category !== initialCategory.id
+
+    if (!hasFilter) {
+      setItemsAfterFilter(items)
+      setPageCountAfterFilter(pageCount)
+      return
     }
-  }, [items, router.query])
+
+    let cancelled = false
+    setFilterLoading(true)
+    fetch(
+      `/api/archive/feed?page=${currentPage}&tag=${encodeURIComponent(tag)}&category=${encodeURIComponent(category)}`
+    )
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled || !data.success) return
+        setItemsAfterFilter(data.items)
+        setPageCountAfterFilter(data.pageCount)
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setFilterLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [items, pageCount, router.query, currentPage])
 
   useEffect(() => {
     if (router.query.tag === initialTag.id) {
@@ -174,14 +166,16 @@ const Archive: NextPage<{
         }}
       />
       <ContainerLayoutFull>
-        {itemsAfterFilter.length > 0 ? (
-          <ArchiveCollection items={itemsAfterFilter.slice(0, PER_COUNT)} />
+        {filterLoading ? (
+          <p className="my-8 text-center text-neutral-500">加载中…</p>
+        ) : itemsAfterFilter.length > 0 ? (
+          <ArchiveCollection items={itemsAfterFilter} />
         ) : (
           <Empty />
         )}
         {pageCountAfterFilter !== 0 && (
           <PaginationSection
-            currentPage={1}
+            currentPage={currentPage}
             currentQuery={currentQuery}
             totalPages={pageCountAfterFilter}
             basePath={ARCHIVE}

@@ -26,7 +26,17 @@ export async function getImageInfo(src: string) {
 }
 
 const calculatePlaiceholder = async (url: string) => {
-  // 开发模式，或显式跳过：避免远程探测拖慢 ISR / 按需生成
+  // 默认跳过远程探测（SaaS 省 CPU）；需 blur 占位时在环境变量设 ENABLE_REMOTE_IMAGE_PROBE=1
+  if (process.env.ENABLE_REMOTE_IMAGE_PROBE !== '1') {
+    return {
+      placeholder: DEFAULT_PLACEHOLDER,
+      width: DEFAULT_WIDTH,
+      height: DEFAULT_HEIGHT,
+      type: 'jpg',
+    }
+  }
+
+  // 显式开启时仍允许 SKIP 强制关闭
   if (
     process.env.NODE_ENV === 'development' ||
     process.env.SKIP_REMOTE_IMAGE_PROBE === '1'

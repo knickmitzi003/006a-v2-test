@@ -1,6 +1,10 @@
 import { ApiScope } from '@/src/types/notion'
 import { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints'
-import { getAll } from './getDatabase'
+import {
+  combineScopeWithFilter,
+  slugEqualsFilter,
+} from './filter'
+import { getAll, queryDatabasePages } from './getDatabase'
 import { readRichTextPlain } from './readProperty'
 
 const THEME_CONFIG_SLUG = 'theme-config'
@@ -116,14 +120,49 @@ export function clearRemoteThemeCache(): void {
   remoteThemeInflight = null
 }
 
-export const getPageBySlug = async (slug: string) => {
-  const pages = await getPages()
+function isNotionContentType(
+  object: PageObjectResponse,
+  typeName: string
+): boolean {
   return (
-    pages.find(
-      (page) =>
-        (page.properties['slug'] as any).rich_text[0]?.plain_text === slug
-    ) ?? (null as unknown as PageObjectResponse)
+    object.properties['type'].type === 'select' &&
+    object.properties['type'].select?.name === typeName
   )
+}
+
+function pickPostBySlugResults(
+  results: PageObjectResponse[],
+  scope: ApiScope.Archive | ApiScope.Draft
+): PageObjectResponse | null {
+  const posts = results.filter((object) => isNotionContentType(object, 'Post'))
+  if (posts.length > 0) return posts[0]
+
+  if (scope === ApiScope.Archive) {
+    const pieces = results.filter((object) =>
+      isNotionContentType(object, 'Piece')
+    )
+    if (pieces.length > 0) return pieces[0]
+  }
+
+  return null
+}
+
+/** 按 slug 查单篇（Archive / Draft），Notion filter 命中，不拉全库 */
+export async function getPostBySlug(
+  slug: string,
+  scope: ApiScope.Archive | ApiScope.Draft
+): Promise<PageObjectResponse | null> {
+  const filter = combineScopeWithFilter(scope, slugEqualsFilter(slug))
+  const results = await queryDatabasePages(filter, { pageSize: 5 })
+  return pickPostBySlugResults(results, scope)
+}
+
+export const getPageBySlug = async (slug: string) => {
+  const filter = combineScopeWithFilter(ApiScope.Page, slugEqualsFilter(slug))
+  const results = await queryDatabasePages(filter, { pageSize: 1 })
+  const page =
+    results.find((object) => isNotionContentType(object, 'Page')) ?? null
+  return page ?? (null as unknown as PageObjectResponse)
 }
 
 export const getPages = async () => {

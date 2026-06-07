@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { formatPosts } from '@/src/lib/blog/format/post'
+import { formatPosts, FORMAT_POST_LIST_OPTIONS } from '@/src/lib/blog/format/post'
 import {
   getAllPostStatsMap,
   getPostStats,
@@ -20,7 +20,9 @@ async function loadPublishedPosts(): Promise<Post[]> {
     return postsCache.posts
   }
   const raw = await getPosts(ApiScope.Archive)
-  const posts = (await formatPosts(raw)).filter((p) => p.status === 'Published')
+  const posts = (await formatPosts(raw, FORMAT_POST_LIST_OPTIONS)).filter(
+    (p) => p.status === 'Published'
+  )
   postsCache = { at: Date.now(), posts }
   return posts
 }
