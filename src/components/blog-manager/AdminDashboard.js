@@ -35,6 +35,7 @@ async function triggerContentRevalidation(payload = {}) {
     const data = await res.json();
     return {
       ok: res.ok && data.success !== false,
+      status: res.status,
       data,
       succeeded: typeof data.succeeded === 'number' ? data.succeeded : null,
       failed: typeof data.failed === 'number' ? data.failed : null,
@@ -79,6 +80,8 @@ function resolveSaveRevalidateScope(type, slug) {
 }
 
 const REVALIDATE_BATCH_SIZE = 12;
+/** 手动「刷新BLOG」完成后冷却（防连点 / 狂点） */
+const BLOG_SHELL_REFRESH_COOLDOWN_MS = 60_000;
 
 /** 分批按需刷新，避免单次 Serverless 超时并降低峰值 CPU */
 async function runBatchedRevalidation(options = {}) {
@@ -1759,7 +1762,9 @@ const [mounted, setMounted] = useState(false);
   const editorBlocksRef = useRef(editorBlocks);
   editorBlocksRef.current = editorBlocks;
   const editingSlugRef = useRef(null);
-  const silentRefreshRef = useRef(false);
+  const [blogRefreshBusy, setBlogRefreshBusy] = useState(false);
+  const [blogRefreshCooldownSec, setBlogRefreshCooldownSec] = useState(0);
+  const blogRefreshCooldownUntilRef = useRef(0);
   const adminToastTimerRef = useRef(null);
   const [adminToast, setAdminToast] = useState({ message: '', visible: false, closing: false });
   const [tagDraft, setTagDraft] = useState('');
@@ -2002,6 +2007,15 @@ const [mounted, setMounted] = useState(false);
 
   // 🟢 6. useEffect 挂载
   useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    const tick = () => {
+      const left = Math.ceil((blogRefreshCooldownUntilRef.current - Date.now()) / 1000);
+      setBlogRefreshCooldownSec(left > 0 ? left : 0);
+    };
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, []);
   useEffect(() => { if (mounted) fetchPosts(); }, [mounted]);
   useEffect(() => {
     if (mounted && view === 'list') loadGalleryStorage();
@@ -2479,14 +2493,34 @@ const [mounted, setMounted] = useState(false);
   };
 
   const handleManualDeploy = () => {
-    if (isThemeLoading) return;
-    showAdminToast('正在更新首页与列表页');
-    if (silentRefreshRef.current) return;
-    silentRefreshRef.current = true;
-    triggerContentRevalidation({ scope: 'shell', clearCaches: true, freshTheme: true, warmPaths: true })
-      .then((rev) => showRevalidateFeedback(rev, showAdminToast))
-      .catch((e) => console.warn('列表页更新失败', e))
-      .finally(() => { silentRefreshRef.current = false; });
+    if (isThemeLoading || blogRefreshBusy) return;
+    const now = Date.now();
+    if (now < blogRefreshCooldownUntilRef.current) {
+      const sec = Math.ceil((blogRefreshCooldownUntilRef.current - now) / 1000);
+      showAdminToast(`刷新过于频繁，请 ${sec} 秒后再试`);
+      return;
+    }
+    setBlogRefreshBusy(true);
+    showAdminToast('正在刷新 BLOG…');
+    triggerContentRevalidation({
+      scope: 'shell',
+      clearCaches: true,
+      freshTheme: true,
+      warmPaths: true,
+      manualShell: true,
+    })
+      .then((rev) => {
+        if (rev.status === 429) {
+          const retrySec = rev.data?.retryAfterSec || 60;
+          blogRefreshCooldownUntilRef.current = Date.now() + retrySec * 1000;
+          showAdminToast(rev.data?.error || `刷新过于频繁，请 ${retrySec} 秒后再试`);
+          return;
+        }
+        blogRefreshCooldownUntilRef.current = Date.now() + BLOG_SHELL_REFRESH_COOLDOWN_MS;
+        showRevalidateFeedback(rev, showAdminToast);
+      })
+      .catch((e) => console.warn('BLOG 刷新失败', e))
+      .finally(() => { setBlogRefreshBusy(false); });
   };
 
   const deleteTagOption = (e, tagToDelete) => {
@@ -2680,9 +2714,32 @@ const [mounted, setMounted] = useState(false);
            </div>
            
            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-             {/* 🟢 修复：更新按钮 */}
-             <button onClick={handleManualDeploy} style={{background:'#424242', border:'1px solid greenyellow', padding:'10px', borderRadius:'8px', color:'greenyellow', cursor:'pointer'}} title="更新首页、归档与分类/标签列表（不重建全部文章页）">
+             <button
+               type="button"
+               onClick={handleManualDeploy}
+               disabled={isThemeLoading || blogRefreshBusy || blogRefreshCooldownSec > 0}
+               style={{
+                 background: '#424242',
+                 border: '1px solid greenyellow',
+                 padding: '10px 14px',
+                 borderRadius: '8px',
+                 color: 'greenyellow',
+                 cursor: (isThemeLoading || blogRefreshBusy || blogRefreshCooldownSec > 0) ? 'not-allowed' : 'pointer',
+                 opacity: (isThemeLoading || blogRefreshBusy || blogRefreshCooldownSec > 0) ? 0.45 : 1,
+                 display: 'flex',
+                 alignItems: 'center',
+                 gap: '8px',
+                 fontSize: '13px',
+                 fontWeight: 'bold',
+               }}
+               title={
+                 blogRefreshCooldownSec > 0
+                   ? `刷新冷却中（${blogRefreshCooldownSec}s）`
+                   : '刷新首页、归档与分类/标签列表（不重建全部文章内页）'
+               }
+             >
                <Icons.Refresh />
+               刷新BLOG
              </button>
              {view === 'list' ? <AnimatedBtn text="发布新内容" onClick={handleCreate} /> : <AnimatedBtn text="返回列表" onClick={leaveEditView} />}
            </div>

@@ -16,6 +16,10 @@ export const config = {
   maxDuration: 300,
 }
 
+/** 手动「刷新BLOG」最小间隔（服务端兜底，防多标签/脚本连点） */
+const MANUAL_SHELL_REVALIDATE_MIN_MS = 45_000
+let lastManualShellRevalidateAt = 0
+
 function resolveTagIds(tagsString) {
   return (tagsString || '')
     .split(',')
@@ -42,7 +46,24 @@ export default async function handler(req, res) {
       freshTheme = false,
       warmPaths = false,
       expectedTheme = null,
+      manualShell = false,
     } = req.body ?? {}
+
+    if (scope === 'shell' && manualShell) {
+      const now = Date.now()
+      const elapsed = now - lastManualShellRevalidateAt
+      if (lastManualShellRevalidateAt > 0 && elapsed < MANUAL_SHELL_REVALIDATE_MIN_MS) {
+        const retryAfterSec = Math.ceil(
+          (MANUAL_SHELL_REVALIDATE_MIN_MS - elapsed) / 1000
+        )
+        return res.status(429).json({
+          success: false,
+          error: `刷新过于频繁，请 ${retryAfterSec} 秒后再试`,
+          retryAfterSec,
+        })
+      }
+      lastManualShellRevalidateAt = now
+    }
 
     if (scope === 'list') {
       let paths = []
