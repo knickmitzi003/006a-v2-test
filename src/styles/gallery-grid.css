@@ -1,6 +1,8 @@
 /**
- * Gallery Epic 流体网格：随容器宽度与浏览器缩放自动重排列数。
+ * Gallery Epic 流体网格：固定最小列宽 + auto-fill，窗口变窄时列数自然减少。
  * 父级需加 .gallery-content-container（container-type: inline-size）。
+ *
+ * 勿用 cqi 作列最小宽——cqi 随容器同比缩放，会导致列数几乎不变（始终 ~5 列）。
  */
 
 .gallery-content-container {
@@ -13,7 +15,8 @@
 .gallery-card-grid,
 .gallery-media-grid,
 .gallery-pill-grid,
-.gallery-recommend-grid {
+.gallery-recommend-grid,
+.gallery-tag-grid {
   display: grid;
   width: 100%;
   grid-template-columns: repeat(
@@ -22,16 +25,25 @@
   );
 }
 
-/* 首页 / 分类详情卡片：宽约 4–5 列 */
+/*
+ * 首页 / 列表卡片：~17.5rem 最小宽
+ * 宽屏 5 列 → 缩窗 4 → 3 → 2，卡片在 1fr 轨道内随宽度伸缩
+ */
 .gallery-card-grid {
-  --gallery-col-min: max(10.5rem, 19cqi);
+  --gallery-col-min: 17.5rem;
   column-gap: 0.625rem;
   row-gap: 1.5rem;
 }
 
-/* 文章内页图库：略小单元格，随正文区宽度伸缩 */
+@container gallery (max-width: 22rem) {
+  .gallery-card-grid {
+    --gallery-col-min: 10.5rem;
+  }
+}
+
+/* 文章内页图库：略小单元格，正文区较窄时 3–4 列 */
 .gallery-media-grid {
-  --gallery-col-min: max(9rem, 22cqi);
+  --gallery-col-min: 13.75rem;
   gap: 0.75rem;
 }
 
@@ -41,21 +53,19 @@
   }
 }
 
-/* 分类索引 pill 按钮 */
+@container gallery (max-width: 20rem) {
+  .gallery-media-grid {
+    --gallery-col-min: 9rem;
+  }
+}
+
 .gallery-pill-grid {
-  --gallery-col-min: max(8.5rem, 17cqi);
+  --gallery-col-min: 8.5rem;
   gap: 0.75rem;
 }
 
-/* 标签索引：多列文字链 */
 .gallery-tag-grid {
-  display: grid;
-  width: 100%;
-  --gallery-col-min: max(9rem, 18cqi);
-  grid-template-columns: repeat(
-    auto-fill,
-    minmax(min(100%, var(--gallery-col-min)), 1fr)
-  );
+  --gallery-col-min: 9rem;
   column-gap: 2rem;
   row-gap: 0;
 }
@@ -66,9 +76,8 @@
   }
 }
 
-/* 内页底部「猜你喜欢」：略宽卡片 */
 .gallery-recommend-grid {
-  --gallery-col-min: max(11rem, 26cqi);
+  --gallery-col-min: 15rem;
   column-gap: 1.25rem;
   row-gap: 2rem;
 }
