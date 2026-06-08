@@ -2334,7 +2334,15 @@ const [mounted, setMounted] = useState(false);
       try {
         const res = await fetch('/api/admin/post', {
           method: 'POST',
-          body: JSON.stringify({ id: currentId, title: form.title, excerpt: form.excerpt, cover: form.cover || '', type: 'Widget', status: form.status || 'Published' })
+          body: JSON.stringify({
+            id: currentId,
+            title: form.title,
+            excerpt: form.excerpt,
+            cover: form.cover || '',
+            slug: form.slug,
+            type: 'Widget',
+            status: form.status || 'Published',
+          }),
         });
         const d = await res.json();
         if (!d.success) alert(`❌ 保存失败！\n\n错误信息:\n${d.error}`);
@@ -2342,10 +2350,12 @@ const [mounted, setMounted] = useState(false);
           alert("✅ 保存成功！");
           setView('list');
           fetchPosts();
-          await triggerContentRevalidation({
-            scope: resolveSaveRevalidateScope('Widget', form.slug),
-            slug: form.slug,
-          }).then((rev) => showRevalidateFeedback(rev, showAdminToast));
+          if (d.revalidation) {
+            showRevalidateFeedback(
+              { ok: d.revalidation.ok, ...d.revalidation },
+              showAdminToast
+            );
+          }
         }
       } catch (e) { alert('网络错误: ' + e.message); }
       finally { setLoading(false); }
@@ -2406,7 +2416,8 @@ const [mounted, setMounted] = useState(false);
           content: fullContent, 
           blocksData,
           id: currentId,
-          type: form.type || 'Post' 
+          type: form.type || 'Post',
+          previousSlug: editingSlugRef.current || '',
         })
       });
       const d = await res.json();
@@ -2436,17 +2447,11 @@ const [mounted, setMounted] = useState(false);
             setGalleryDirty(false);
           } catch (e) {
             alert(`✅ 文章已保存，但图库上传失败：\n\n${e.message}\n\n请留在本页重试保存。`);
-            try {
-              const rev = await triggerContentRevalidation({
-                scope: resolveSaveRevalidateScope(form.type || 'Post', form.slug),
-                slug: form.slug,
-                category: form.category || '',
-                tags: form.tags || '',
-                previousSlug: editingSlugRef.current,
-              });
-              showRevalidateFeedback(rev, showAdminToast);
-            } catch (revalidateErr) {
-              console.warn('图库失败后的页面刷新失败', revalidateErr);
+            if (d.revalidation) {
+              showRevalidateFeedback(
+                { ok: d.revalidation.ok, ...d.revalidation },
+                showAdminToast
+              );
             }
             return;
           }
@@ -2460,18 +2465,13 @@ const [mounted, setMounted] = useState(false);
         fetchPosts();
         loadGalleryStorage();
 
-        try {
-          const rev = await triggerContentRevalidation({
-            scope: resolveSaveRevalidateScope(form.type || 'Post', form.slug),
-            slug: form.slug,
-            category: form.category || '',
-            tags: form.tags || '',
-            previousSlug,
-          });
-          showRevalidateFeedback(rev, showAdminToast);
-        } catch (revalidateErr) {
-          console.warn('页面增量刷新失败（文章已保存）', revalidateErr);
-          showAdminToast('文章已保存，但前台更新未完成');
+        if (d.revalidation) {
+          showRevalidateFeedback(
+            { ok: d.revalidation.ok, ...d.revalidation },
+            showAdminToast
+          );
+        } else {
+          showAdminToast('文章已保存，前台刷新未执行');
         }
       }
     } catch (e) {
@@ -2562,8 +2562,12 @@ const [mounted, setMounted] = useState(false);
       if (!d.success) alert(d.error || '置顶操作失败');
       else {
         await fetchPosts();
-        await triggerContentRevalidation({ scope: 'post', slug: p.slug, category: p.category || '', tags: p.tags || '' })
-          .then((rev) => showRevalidateFeedback(rev, showAdminToast));
+        if (d.revalidation) {
+          showRevalidateFeedback(
+            { ok: d.revalidation.ok, ...d.revalidation },
+            showAdminToast
+          );
+        }
       }
     } catch (err) {
       alert(err.message || '置顶操作失败');
@@ -2582,13 +2586,12 @@ const [mounted, setMounted] = useState(false);
         throw new Error(data.error || '删除失败');
       }
       await fetchPosts();
-      const rev = await triggerContentRevalidation({
-        scope: 'delete',
-        slug: p.slug,
-        category: p.category || '',
-        tags: p.tags || '',
-      });
-      showRevalidateFeedback(rev, showAdminToast);
+      if (data.revalidation) {
+        showRevalidateFeedback(
+          { ok: data.revalidation.ok, ...data.revalidation },
+          showAdminToast
+        );
+      }
     } catch (e) {
       alert('删除失败：' + (e.message || '未知错误'));
     } finally {

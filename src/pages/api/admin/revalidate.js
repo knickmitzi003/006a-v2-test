@@ -153,10 +153,6 @@ export default async function handler(req, res) {
       warmPaths: shouldWarmPaths,
       origin: warmOrigin,
       expectedTheme: expectedTheme || null,
-      expectedSlug:
-        shouldWarmPaths && slug && scope === 'post'
-          ? String(slug).trim()
-          : null,
     })
     const failed = results.filter((item) => !item.ok)
     const succeeded = results.filter((item) => item.ok)

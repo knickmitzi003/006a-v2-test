@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import CONFIG from '@/blog.config'
+import { slugify } from '@/src/lib/util'
 import { resolveThemeId } from '@/src/themes/registry'
 import { clearGalleryAdBannerCache } from '@/src/lib/gallery/loadGalleryAdBanner'
 import { clearGalleryPostsCache } from '@/src/lib/gallery/galleryPostsCache'
@@ -455,4 +456,109 @@ export async function revalidateMany(
   }
 
   return results
+}
+
+export function resolveTagIdsFromString(tagsString: string): string[] {
+  return (tagsString || '')
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((name) => slugify(name))
+}
+
+export type ContentSaveRevalidateInput = {
+  type?: string
+  slug: string
+  category?: string | null
+  tags?: string | null
+  previousSlug?: string | null
+  kind?: 'save' | 'delete'
+}
+
+/**
+ * 保存/删除后立即刷新前台（与手动「刷新BLOG」相同：先 shell + warm，再补充文章路径）。
+ * 须在 /api/admin/post 写入 Notion 成功后、返回响应前调用。
+ */
+export async function revalidateAfterContentSave(
+  res: NextApiResponse,
+  req: Pick<NextApiRequest, 'headers'>,
+  input: ContentSaveRevalidateInput
+): Promise<{ ok: boolean; succeeded: number; failed: number; total: number }> {
+  const {
+    slug,
+    category,
+    tags,
+    previousSlug,
+    type = 'Post',
+    kind = 'save',
+  } = input
+
+  if (!slug?.trim()) {
+    return { ok: true, succeeded: 0, failed: 0, total: 0 }
+  }
+
+  const origin = resolveRevalidateOrigin(req)
+  const categoryId = category?.trim() ? slugify(category.trim()) : null
+  const tagIds = resolveTagIdsFromString(tags || '')
+  const scope =
+    kind === 'delete' ? 'delete' : resolveSaveRevalidateScope(type, slug)
+
+  const shellPaths = collectShellRevalidatePaths()
+  clearContentBuildCaches()
+
+  console.log('[revalidateAfterContentSave] shell', { slug, scope, kind })
+
+  const shellResults = await revalidateMany(res, shellPaths, {
+    freshTheme: true,
+    clearCaches: false,
+    warmPaths: true,
+    origin,
+  })
+
+  let extraPaths: string[] = []
+  const shellSet = new Set(shellPaths)
+
+  if (scope === 'post') {
+    const all = await collectPostRevalidatePaths(slug, {
+      categoryId,
+      tagIds,
+      previousSlug,
+    })
+    extraPaths = all.filter((p) => !shellSet.has(p))
+  } else if (scope === 'delete') {
+    const all = await collectDeleteRevalidatePaths(slug, { categoryId, tagIds })
+    extraPaths = all.filter((p) => !shellSet.has(p))
+  } else if (scope === 'page') {
+    extraPaths = collectPageRevalidatePaths(slug, { previousSlug }).filter(
+      (p) => !shellSet.has(p)
+    )
+  } else if (scope === 'widget') {
+    extraPaths = ['/', '/about', '/download'].filter((p) => !shellSet.has(p))
+  } else if (scope === 'gallery-ad') {
+    const all = await collectGalleryAdRevalidatePaths()
+    extraPaths = all.filter((p) => !shellSet.has(p))
+  }
+
+  let extraResults: RevalidateResult[] = []
+  if (extraPaths.length > 0) {
+    console.log('[revalidateAfterContentSave] extra', {
+      slug,
+      count: extraPaths.length,
+    })
+    extraResults = await revalidateMany(res, extraPaths, {
+      freshTheme: false,
+      clearCaches: false,
+      warmPaths: true,
+      origin,
+    })
+  }
+
+  const allResults = [...shellResults, ...extraResults]
+  const failed = allResults.filter((r) => !r.ok).length
+  return {
+    ok: failed === 0,
+    succeeded: allResults.length - failed,
+    failed,
+    total: allResults.length,
+  }
 }
