@@ -1064,6 +1064,7 @@ const ADMIN_THEMES = [
   { id: 'gallery', label: 'Gallery', color: '#f97316', desc: '图库风格 · 卡片直链下载' },
 ];
 const lightSpinStyle = { width: '13px', height: '13px', border: '2px solid rgba(255,255,255,0.25)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'imgspin 0.8s linear infinite', verticalAlign: 'middle' };
+const blogRefreshSpinStyle = { width: '13px', height: '13px', border: '2px solid rgba(173,255,47,0.25)', borderTopColor: 'greenyellow', borderRadius: '50%', display: 'inline-block', animation: 'imgspin 0.8s linear infinite', verticalAlign: 'middle', flexShrink: 0 };
 const fmtStyle = (b) => ({
   fontWeight: b.bold ? 'bold' : 'normal',
   fontStyle: b.italic ? 'italic' : 'normal',
@@ -2513,10 +2514,12 @@ const [mounted, setMounted] = useState(false);
         if (rev.status === 429) {
           const retrySec = rev.data?.retryAfterSec || 60;
           blogRefreshCooldownUntilRef.current = Date.now() + retrySec * 1000;
+          setBlogRefreshCooldownSec(retrySec);
           showAdminToast(rev.data?.error || `刷新过于频繁，请 ${retrySec} 秒后再试`);
           return;
         }
         blogRefreshCooldownUntilRef.current = Date.now() + BLOG_SHELL_REFRESH_COOLDOWN_MS;
+        setBlogRefreshCooldownSec(Math.ceil(BLOG_SHELL_REFRESH_COOLDOWN_MS / 1000));
         showRevalidateFeedback(rev, showAdminToast);
       })
       .catch((e) => console.warn('BLOG 刷新失败', e))
@@ -2738,8 +2741,22 @@ const [mounted, setMounted] = useState(false);
                    : '刷新首页、归档与分类/标签列表（不重建全部文章内页）'
                }
              >
-               <Icons.Refresh />
-               刷新BLOG
+               {blogRefreshBusy ? (
+                 <>
+                   <span style={blogRefreshSpinStyle} aria-hidden />
+                   刷新中…
+                 </>
+               ) : blogRefreshCooldownSec > 0 ? (
+                 <>
+                   <Icons.Refresh />
+                   刷新BLOG ({blogRefreshCooldownSec}s)
+                 </>
+               ) : (
+                 <>
+                   <Icons.Refresh />
+                   刷新BLOG
+                 </>
+               )}
              </button>
              {view === 'list' ? <AnimatedBtn text="发布新内容" onClick={handleCreate} /> : <AnimatedBtn text="返回列表" onClick={leaveEditView} />}
            </div>
