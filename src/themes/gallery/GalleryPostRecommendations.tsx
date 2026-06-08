@@ -1,5 +1,8 @@
 import Link from 'next/link'
-import { GalleryRecommendPost } from '@/src/lib/gallery/galleryRecommendations'
+import {
+  GalleryRecommendPost,
+  withoutGalleryAnnouncement,
+} from '@/src/lib/gallery/galleryRecommendations'
 import { galleryCardTitleClass } from './galleryFonts'
 
 function formatPostDate(iso: string) {
@@ -20,7 +23,8 @@ type GalleryPostRecommendationsProps = {
 export function GalleryPostRecommendations({
   posts,
 }: GalleryPostRecommendationsProps) {
-  if (!posts.length) return null
+  const items = withoutGalleryAnnouncement(posts, posts.length)
+  if (!items.length) return null
 
   return (
     <section className="mt-12 border-t border-neutral-200 pt-10">
@@ -28,7 +32,7 @@ export function GalleryPostRecommendations({
         猜你喜欢
       </h2>
       <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
-        {posts.map((item) => (
+        {items.map((item) => (
           <Link
             key={item.slug}
             href={`/post/${item.slug}`}

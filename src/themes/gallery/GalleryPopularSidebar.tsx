@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { GalleryRecommendPost } from '@/src/lib/gallery/galleryRecommendations'
-import { pickGalleryRecommendCover } from '@/src/lib/gallery/postCover'
+import {
+  GalleryRecommendPost,
+  withoutGalleryAnnouncement,
+} from '@/src/lib/gallery/galleryRecommendations'
 
 /** Epic 侧边栏：左侧横版缩略图 + 右侧标题/日期（标题顶对齐封面） */
 const THUMB_CLASS = 'w-[108px] shrink-0 overflow-hidden rounded-[4px] bg-neutral-100'
@@ -16,25 +18,8 @@ function formatEpicDate(iso: string) {
   return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`
 }
 
-function mergePinnedSidebarPost(
-  posts: GalleryRecommendPost[],
-  pinnedPost?: GalleryRecommendPost | null
-): GalleryRecommendPost[] {
-  if (!pinnedPost) return posts
-  const fromApi = posts.find((p) => p.slug === pinnedPost.slug)
-  const coverSrc = pickGalleryRecommendCover(
-    pinnedPost.coverSrc,
-    fromApi?.coverSrc
-  )
-  const pinned = coverSrc ? { ...pinnedPost, coverSrc } : pinnedPost
-  const rest = posts.filter((p) => p.slug !== pinnedPost.slug)
-  return [pinned, ...rest]
-}
-
 type GalleryPopularSidebarProps = {
   posts: GalleryRecommendPost[]
-  /** 站长公告：刷新热度列表后仍保持置顶 */
-  pinnedPost?: GalleryRecommendPost | null
   excludeSlug?: string
   className?: string
 }
@@ -42,17 +27,16 @@ type GalleryPopularSidebarProps = {
 /** Gallery Epic 风格：内页右侧「热门推荐」（支持 Supabase 热度刷新） */
 export function GalleryPopularSidebar({
   posts: initialPosts,
-  pinnedPost = null,
   excludeSlug = '',
   className = '',
 }: GalleryPopularSidebarProps) {
   const [posts, setPosts] = useState(() =>
-    mergePinnedSidebarPost(initialPosts, pinnedPost)
+    withoutGalleryAnnouncement(initialPosts)
   )
 
   useEffect(() => {
-    setPosts(mergePinnedSidebarPost(initialPosts, pinnedPost))
-  }, [initialPosts, pinnedPost])
+    setPosts(withoutGalleryAnnouncement(initialPosts))
+  }, [initialPosts])
 
   useEffect(() => {
     if (!excludeSlug) return
@@ -63,14 +47,14 @@ export function GalleryPopularSidebar({
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled && data.success && Array.isArray(data.posts) && data.posts.length) {
-          setPosts(mergePinnedSidebarPost(data.posts, pinnedPost))
+          setPosts(withoutGalleryAnnouncement(data.posts))
         }
       })
       .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [excludeSlug, pinnedPost])
+  }, [excludeSlug])
 
   if (!posts.length) return null
 

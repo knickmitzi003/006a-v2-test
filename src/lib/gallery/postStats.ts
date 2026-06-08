@@ -7,7 +7,6 @@ import { ANNOUNCEMENT_SLUG } from '@/src/lib/blog/pinnedPosts'
 import {
   GalleryRecommendPost,
   GALLERY_RECOMMEND_COUNT,
-  pinAnnouncementForGallerySidebar,
   postToGalleryRecommend,
 } from '@/src/lib/gallery/galleryRecommendations'
 import { getSupabaseAdmin } from '@/src/lib/supabase/admin'

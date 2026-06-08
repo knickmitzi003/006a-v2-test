@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { getAnnouncementPost } from '@/src/lib/blog/loadHomeWidgets'
-import { pinAnnouncementForGallerySidebar } from '@/src/lib/gallery/galleryRecommendations'
+import { withoutGalleryAnnouncement } from '@/src/lib/gallery/galleryRecommendations'
 import { loadGalleryCachedPublishedPosts } from '@/src/lib/gallery/galleryPostsCache'
 import {
   getAllPostStatsMap,
@@ -76,13 +75,7 @@ export default async function handler(
           statsMap,
           limit
         )
-        const announcementPost = await getAnnouncementPost()
-        const posts = pinAnnouncementForGallerySidebar(
-          popular,
-          allPosts,
-          limit,
-          announcementPost
-        )
+        const posts = withoutGalleryAnnouncement(popular, limit)
         res.setHeader(
           'Cache-Control',
           'public, s-maxage=30, stale-while-revalidate=60'

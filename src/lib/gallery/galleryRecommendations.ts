@@ -1,5 +1,4 @@
 import { ANNOUNCEMENT_SLUG } from '@/src/lib/blog/pinnedPosts'
-import { resolvePostCoverSrc } from '@/src/lib/gallery/postCover'
 import { Post } from '@/src/types/blog'
 import {
   pickPopularRecommendations,
@@ -34,7 +33,7 @@ export function postToGalleryRecommend(post: Post): GalleryRecommendPost {
   return {
     title: post.title,
     slug: post.slug,
-    coverSrc: resolvePostCoverSrc(post),
+    coverSrc: post.cover?.light?.src || '',
     date: post.date?.updated || post.date?.created || '',
   }
 }
@@ -48,28 +47,30 @@ export function findGalleryAnnouncementPost(
   )
 }
 
-/** 右侧「热门推荐」：公告始终置顶 */
+/** 内页推荐位（侧栏 / 底部）统一排除站长公告 */
+export function withoutGalleryAnnouncement(
+  recommendations: GalleryRecommendPost[],
+  limit = GALLERY_RECOMMEND_COUNT
+): GalleryRecommendPost[] {
+  return recommendations
+    .filter((p) => p.slug !== ANNOUNCEMENT_SLUG)
+    .slice(0, limit)
+}
+
+/** @deprecated 公告不再出现在内页推荐；保留别名避免旧引用报错 */
 export function pinAnnouncementForGallerySidebar(
   recommendations: GalleryRecommendPost[],
-  allPosts: Post[],
-  limit = GALLERY_RECOMMEND_COUNT,
-  announcementPost?: Post | null
+  _allPosts?: Post[],
+  limit = GALLERY_RECOMMEND_COUNT
 ): GalleryRecommendPost[] {
-  const announcement =
-    announcementPost ?? findGalleryAnnouncementPost(allPosts)
-  if (!announcement) {
-    return recommendations.slice(0, limit)
-  }
-  const pinned = postToGalleryRecommend(announcement)
-  const rest = recommendations.filter((p) => p.slug !== ANNOUNCEMENT_SLUG)
-  return [pinned, ...rest].slice(0, limit)
+  return withoutGalleryAnnouncement(recommendations, limit)
 }
 
 /** 底部「猜你喜欢」：不展示站长公告 */
 export function excludeAnnouncementFromGalleryRecommendations(
   recommendations: GalleryRecommendPost[]
 ): GalleryRecommendPost[] {
-  return recommendations.filter((p) => p.slug !== ANNOUNCEMENT_SLUG)
+  return withoutGalleryAnnouncement(recommendations, recommendations.length)
 }
 
 /**

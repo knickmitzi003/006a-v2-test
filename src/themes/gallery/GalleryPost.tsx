@@ -19,7 +19,6 @@ type GalleryPostProps = {
   blocks: BlockResponse[]
   sidebarRecommendations: GalleryRecommendPost[]
   bottomRecommendations: GalleryRecommendPost[]
-  pinnedSidebarPost?: GalleryRecommendPost | null
   postStats?: PostStatsSnapshot | null
   galleryAdBanner?: GalleryAdBannerData | null
   navPages?: Page[]
@@ -32,7 +31,6 @@ export const GalleryPost = ({
   blocks,
   sidebarRecommendations,
   bottomRecommendations,
-  pinnedSidebarPost = null,
   postStats = null,
   galleryAdBanner = null,
   navPages = [],
@@ -93,7 +91,6 @@ export const GalleryPost = ({
 
           <GalleryPopularSidebar
             posts={sidebarRecommendations}
-            pinnedPost={pinnedSidebarPost}
             excludeSlug={post.slug}
             className="hidden lg:block lg:sticky lg:top-6 lg:self-start"
           />

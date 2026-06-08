@@ -13,12 +13,9 @@ import withNavFooter from '../../components/withNavFooter'
 import { GalleryPost } from '@/src/themes/gallery/GalleryPost'
 import {
   buildGalleryRecommendations,
-  excludeAnnouncementFromGalleryRecommendations,
   GalleryRecommendPost,
-  pinAnnouncementForGallerySidebar,
-  postToGalleryRecommend,
+  withoutGalleryAnnouncement,
 } from '@/src/lib/gallery/galleryRecommendations'
-import { getAnnouncementPost } from '@/src/lib/blog/loadHomeWidgets'
 import {
   getAllPostStatsMap,
   getPostStats,
@@ -92,31 +89,19 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
       const { previousPost, nextPost } = getNavigationInfo(navPosts, postForPage)
 
       const postStats = await getPostStats(slug)
-      let recommendations: GalleryRecommendPost[] = []
       let sidebarRecommendations: GalleryRecommendPost[] = []
       let bottomRecommendations: GalleryRecommendPost[] = []
-      let pinnedSidebarPost: GalleryRecommendPost | null = null
       if (activeTheme === 'gallery') {
         try {
           const statsMap = await getAllPostStatsMap()
-          recommendations = buildGalleryRecommendations(
+          const recommendations = buildGalleryRecommendations(
             postForPage,
             navPosts,
             undefined,
             statsMap
           )
-          const announcementPost = await getAnnouncementPost()
-          pinnedSidebarPost = announcementPost
-            ? postToGalleryRecommend(announcementPost)
-            : null
-          sidebarRecommendations = pinAnnouncementForGallerySidebar(
-            recommendations,
-            navPosts,
-            undefined,
-            announcementPost
-          )
-          bottomRecommendations =
-            excludeAnnouncementFromGalleryRecommendations(recommendations)
+          sidebarRecommendations = withoutGalleryAnnouncement(recommendations)
+          bottomRecommendations = withoutGalleryAnnouncement(recommendations)
         } catch (recError) {
           console.warn('Post page: gallery recommendations failed', recError)
         }
@@ -137,10 +122,8 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
             previousPost: previousPost || null,
             nextPost: nextPost || null,
         },
-        recommendations,
         sidebarRecommendations,
         bottomRecommendations,
-        pinnedSidebarPost,
         postStats,
         galleryAdBanner,
       }))
@@ -172,10 +155,8 @@ const PostPage: NextPage<{
   post: Post
   blocks: BlockResponse[]
   navigation: { previousPost: PartialPost; nextPost: PartialPost }
-  recommendations?: GalleryRecommendPost[]
   sidebarRecommendations?: GalleryRecommendPost[]
   bottomRecommendations?: GalleryRecommendPost[]
-  pinnedSidebarPost?: GalleryRecommendPost | null
   postStats?: { viewCount: number; downloadCount: number } | null
   galleryAdBanner?: GalleryAdBanner | null
   activeTheme?: string
@@ -186,7 +167,6 @@ const PostPage: NextPage<{
   navigation,
   sidebarRecommendations = [],
   bottomRecommendations = [],
-  pinnedSidebarPost = null,
   postStats = null,
   galleryAdBanner = null,
   activeTheme,
@@ -201,7 +181,6 @@ const PostPage: NextPage<{
         blocks={blocks}
         sidebarRecommendations={sidebarRecommendations}
         bottomRecommendations={bottomRecommendations}
-        pinnedSidebarPost={pinnedSidebarPost}
         postStats={postStats}
         galleryAdBanner={galleryAdBanner}
         navPages={navPages}
