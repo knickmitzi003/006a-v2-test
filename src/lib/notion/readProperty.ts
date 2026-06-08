@@ -8,3 +8,98 @@ export function readRichTextPlain(
   const text = prop.rich_text.map((t) => t.plain_text).join('').trim()
   return text || null
 }
+
+/** 将图床 / 外链地址规范为可请求的 https URL（兼容无协议写法） */
+export function normalizeMediaUrl(
+  raw: string | null | undefined
+): string | null {
+  if (!raw) return null
+  const s = raw.trim()
+  if (!s) return null
+  if (s.startsWith('https://') || s.startsWith('http://')) return s
+  if (s.startsWith('//')) return `https:${s}`
+  if (/^[a-zA-Z0-9][-a-zA-Z0-9.]*(?:\/|$)/.test(s)) {
+    return `https://${s.replace(/^\/+/, '')}`
+  }
+  return null
+}
+
+/** 读取 Notion cover 字段（url / files / rich_text） */
+export function readNotionCoverUrl(
+  prop: PageObjectResponse['properties'][string] | undefined
+): string | null {
+  if (!prop || typeof prop !== 'object' || !('type' in prop)) return null
+
+  if (prop.type === 'url') {
+    return normalizeMediaUrl(prop.url)
+  }
+
+  if (prop.type === 'rich_text') {
+    return normalizeMediaUrl(
+      prop.rich_text.map((t) => t.plain_text).join('').trim()
+    )
+  }
+
+  if (prop.type === 'files' && prop.files?.length) {
+    for (const file of prop.files) {
+      if (file.type === 'external' && file.external?.url) {
+        const url = normalizeMediaUrl(file.external.url)
+        if (url) return url
+      }
+      if (file.type === 'file' && file.file?.url) {
+        const url = normalizeMediaUrl(file.file.url)
+        if (url) return url
+      }
+    }
+  }
+
+  return null
+}
+
+/** 读取 Notion 页面级 cover（与数据库 cover 属性不同） */
+export function readPageCoverUrl(
+  cover: PageObjectResponse['cover']
+): string | null {
+  if (!cover) return null
+  if (cover.type === 'external') {
+    return normalizeMediaUrl(cover.external.url)
+  }
+  if (cover.type === 'file') {
+    return normalizeMediaUrl(cover.file.url)
+  }
+  return null
+}
+
+const COVER_PROPERTY_NAMES = ['cover', 'Cover', 'COVER', '封面']
+const COVER_DARK_PROPERTY_NAMES = ['cover_dark', 'Cover Dark', 'coverDark', 'Cover_Dark']
+
+function pickNotionProperty(
+  properties: PageObjectResponse['properties'],
+  names: string[]
+) {
+  for (const name of names) {
+    if (properties[name]) return properties[name]
+  }
+  const lowered = new Set(names.map((n) => n.toLowerCase()))
+  for (const [key, prop] of Object.entries(properties)) {
+    if (lowered.has(key.toLowerCase())) return prop
+  }
+  return undefined
+}
+
+/** 读取页面 properties 中的封面 URL（兼容字段名大小写 / 中文列名） */
+export function readCoverFromPageProperties(
+  properties: PageObjectResponse['properties']
+): string | null {
+  return readNotionCoverUrl(
+    pickNotionProperty(properties, COVER_PROPERTY_NAMES)
+  )
+}
+
+export function readCoverDarkFromPageProperties(
+  properties: PageObjectResponse['properties']
+): string | null {
+  return readNotionCoverUrl(
+    pickNotionProperty(properties, COVER_DARK_PROPERTY_NAMES)
+  )
+}

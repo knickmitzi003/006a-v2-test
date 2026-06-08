@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next'
 import CONFIG from '@/blog.config'
 import { resolveThemeId } from '@/src/themes/registry'
 import { clearGalleryAdBannerCache } from '@/src/lib/gallery/loadGalleryAdBanner'
+import { clearGalleryPostsCache } from '@/src/lib/gallery/galleryPostsCache'
 import { clearArchiveNavCache } from '@/src/lib/blog/archiveNavCache'
 import { getAllCategories } from '@/src/lib/blog/format/category'
 import { formatPages } from '@/src/lib/blog/format/page'
@@ -44,6 +45,7 @@ export function clearContentBuildCaches(): void {
   clearRemoteThemeCache()
   clearGalleryAdBannerCache()
   clearArchiveNavCache()
+  clearGalleryPostsCache()
 }
 
 function normalizePath(path: string): string {

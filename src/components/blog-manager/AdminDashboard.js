@@ -2392,13 +2392,15 @@ const [mounted, setMounted] = useState(false);
     const blocksData = serializeBlocksForSave(blocksForSave);
 
     const autoCover = resolveAutoCover(blocksForSave);
+    const coverForSave =
+      autoCover || (typeof form.cover === 'string' ? form.cover.trim() : '');
 
     try {
       const res = await fetch('/api/admin/post', {
         method: 'POST',
         body: JSON.stringify({ 
           ...form, 
-          cover: autoCover,
+          cover: coverForSave,
           // 🟢 修复：强制提交 Published 状态
           status: 'Published', 
           content: fullContent, 

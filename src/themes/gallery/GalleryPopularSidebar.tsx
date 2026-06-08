@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { GalleryRecommendPost } from '@/src/lib/gallery/galleryRecommendations'
+import { pickGalleryRecommendCover } from '@/src/lib/gallery/postCover'
 
 /** Epic 侧边栏：左侧横版缩略图 + 右侧标题/日期（标题顶对齐封面） */
 const THUMB_CLASS = 'w-[108px] shrink-0 overflow-hidden rounded-[4px] bg-neutral-100'
@@ -20,8 +21,14 @@ function mergePinnedSidebarPost(
   pinnedPost?: GalleryRecommendPost | null
 ): GalleryRecommendPost[] {
   if (!pinnedPost) return posts
+  const fromApi = posts.find((p) => p.slug === pinnedPost.slug)
+  const coverSrc = pickGalleryRecommendCover(
+    pinnedPost.coverSrc,
+    fromApi?.coverSrc
+  )
+  const pinned = coverSrc ? { ...pinnedPost, coverSrc } : pinnedPost
   const rest = posts.filter((p) => p.slug !== pinnedPost.slug)
-  return [pinnedPost, ...rest]
+  return [pinned, ...rest]
 }
 
 type GalleryPopularSidebarProps = {

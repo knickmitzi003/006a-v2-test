@@ -14,11 +14,11 @@ import { GalleryPost } from '@/src/themes/gallery/GalleryPost'
 import {
   buildGalleryRecommendations,
   excludeAnnouncementFromGalleryRecommendations,
-  findGalleryAnnouncementPost,
   GalleryRecommendPost,
   pinAnnouncementForGallerySidebar,
   postToGalleryRecommend,
 } from '@/src/lib/gallery/galleryRecommendations'
+import { getAnnouncementPost } from '@/src/lib/blog/loadHomeWidgets'
 import {
   getAllPostStatsMap,
   getPostStats,
@@ -105,13 +105,15 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
             undefined,
             statsMap
           )
-          const announcement = findGalleryAnnouncementPost(navPosts)
-          pinnedSidebarPost = announcement
-            ? postToGalleryRecommend(announcement)
+          const announcementPost = await getAnnouncementPost()
+          pinnedSidebarPost = announcementPost
+            ? postToGalleryRecommend(announcementPost)
             : null
           sidebarRecommendations = pinAnnouncementForGallerySidebar(
             recommendations,
-            navPosts
+            navPosts,
+            undefined,
+            announcementPost
           )
           bottomRecommendations =
             excludeAnnouncementFromGalleryRecommendations(recommendations)

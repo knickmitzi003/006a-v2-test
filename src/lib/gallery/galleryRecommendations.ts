@@ -1,4 +1,5 @@
 import { ANNOUNCEMENT_SLUG } from '@/src/lib/blog/pinnedPosts'
+import { resolvePostCoverSrc } from '@/src/lib/gallery/postCover'
 import { Post } from '@/src/types/blog'
 import {
   pickPopularRecommendations,
@@ -33,7 +34,7 @@ export function postToGalleryRecommend(post: Post): GalleryRecommendPost {
   return {
     title: post.title,
     slug: post.slug,
-    coverSrc: post.cover?.light?.src || '',
+    coverSrc: resolvePostCoverSrc(post),
     date: post.date?.updated || post.date?.created || '',
   }
 }
@@ -51,9 +52,11 @@ export function findGalleryAnnouncementPost(
 export function pinAnnouncementForGallerySidebar(
   recommendations: GalleryRecommendPost[],
   allPosts: Post[],
-  limit = GALLERY_RECOMMEND_COUNT
+  limit = GALLERY_RECOMMEND_COUNT,
+  announcementPost?: Post | null
 ): GalleryRecommendPost[] {
-  const announcement = findGalleryAnnouncementPost(allPosts)
+  const announcement =
+    announcementPost ?? findGalleryAnnouncementPost(allPosts)
   if (!announcement) {
     return recommendations.slice(0, limit)
   }

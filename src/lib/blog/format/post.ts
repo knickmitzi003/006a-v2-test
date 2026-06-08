@@ -8,6 +8,7 @@ import {
   readPinnedFromNotionProperties,
   sortPostsByPinnedThenDate,
 } from '../pinnedPosts'
+import { readCoverDarkFromPageProperties, readCoverFromPageProperties, readPageCoverUrl } from '../../notion/readProperty'
 import { getImageInfo } from '../getImageInfo'
 
 export type FormatPostOptions = {
@@ -62,9 +63,11 @@ const formatPost = async (
     update_date.type === 'last_edited_time' && update_date.last_edited_time
 
   const postCoverLightSrc =
-    (cover?.type === 'url' && cover.url) || CONFIG.DEFAULT_POST_COVER
+    readCoverFromPageProperties(properties) ||
+    readPageCoverUrl(post.cover) ||
+    CONFIG.DEFAULT_POST_COVER
   const postCoverDarkSrc =
-    (cover_dark?.type === 'url' && cover_dark.url) || postCoverLightSrc
+    readCoverDarkFromPageProperties(properties) || postCoverLightSrc
 
   // 默认占位数据，防止 getImageInfo 报错
   const defaultImgInfo = { width: 1200, height: 630, placeholder: '' }

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { formatPosts, FORMAT_POST_LIST_OPTIONS } from '@/src/lib/blog/format/post'
+import { getAnnouncementPost } from '@/src/lib/blog/loadHomeWidgets'
 import { pinAnnouncementForGallerySidebar } from '@/src/lib/gallery/galleryRecommendations'
+import { loadGalleryCachedPublishedPosts } from '@/src/lib/gallery/galleryPostsCache'
 import {
   getAllPostStatsMap,
   getPostStats,
@@ -9,24 +10,7 @@ import {
   isValidPostSlug,
   pickPopularRecommendations,
 } from '@/src/lib/gallery/postStats'
-import { getPosts } from '@/src/lib/notion/getBlogData'
 import { Post } from '@/src/types/blog'
-import { ApiScope } from '@/src/types/notion'
-
-let postsCache: { at: number; posts: Post[] } | null = null
-const POSTS_CACHE_MS = 60_000
-
-async function loadPublishedPosts(): Promise<Post[]> {
-  if (postsCache && Date.now() - postsCache.at < POSTS_CACHE_MS) {
-    return postsCache.posts
-  }
-  const raw = await getPosts(ApiScope.Archive)
-  const posts = (await formatPosts(raw, FORMAT_POST_LIST_OPTIONS)).filter(
-    (p) => p.status === 'Published'
-  )
-  postsCache = { at: Date.now(), posts }
-  return posts
-}
 
 export default async function handler(
   req: NextApiRequest,
@@ -77,7 +61,7 @@ export default async function handler(
       try {
         const [statsMap, allPosts] = await Promise.all([
           getAllPostStatsMap(),
-          loadPublishedPosts(),
+          loadGalleryCachedPublishedPosts(),
         ])
         const current =
           allPosts.find((p) => p.slug === exclude) ||
@@ -92,10 +76,12 @@ export default async function handler(
           statsMap,
           limit
         )
+        const announcementPost = await getAnnouncementPost()
         const posts = pinAnnouncementForGallerySidebar(
           popular,
           allPosts,
-          limit
+          limit,
+          announcementPost
         )
         res.setHeader(
           'Cache-Control',

@@ -2,6 +2,7 @@ import { Client } from '@notionhq/client';
 import { NotionToMarkdown } from 'notion-to-md';
 import { readPinnedFromNotionProperties } from '@/src/lib/blog/pinnedPosts';
 import { syncSiteThemeFromAdmin } from '@/src/lib/blog/siteTheme';
+import { normalizeMediaUrl, readNotionCoverUrl } from '@/src/lib/notion/readProperty';
 
 const notion = new Client({
   auth: process.env.NOTION_KEY || process.env.NOTION_TOKEN,
@@ -316,7 +317,7 @@ export default async function handler(req, res) {
       try { const blocksRes = await withRetry(() => notion.blocks.children.list({ block_id: queryId })); rawBlocks = blocksRes.results; } catch (e) {}
       let editorBlocks = [];
       try { editorBlocks = await notionToEditorBlocks(rawBlocks); } catch (e) { editorBlocks = []; }
-      return res.status(200).json({ success: true, post: { id: page.id, title: p.title?.title?.[0]?.plain_text || p.Page?.title?.[0]?.plain_text || '无标题', slug: p.slug?.rich_text?.[0]?.plain_text || '', excerpt: p.excerpt?.rich_text?.[0]?.plain_text || '', category: p.category?.select?.name || '', tags: (p.tags?.multi_select || []).map(t => t.name).join(','), status: p.status?.status?.name || p.status?.select?.name || 'Published', type: p.type?.select?.name || 'Post', date: p.date?.date?.start || '', cover: p.cover?.url || p.cover?.file?.url || p.cover?.external?.url || '', pinned: readPinnedFromNotionProperties(p), download: readDownloadProperty(p.download), download_size: readRichTextProperty(p.download_size), content: cleanContent, rawBlocks: rawBlocks, editorBlocks: editorBlocks } });
+      return res.status(200).json({ success: true, post: { id: page.id, title: p.title?.title?.[0]?.plain_text || p.Page?.title?.[0]?.plain_text || '无标题', slug: p.slug?.rich_text?.[0]?.plain_text || '', excerpt: p.excerpt?.rich_text?.[0]?.plain_text || '', category: p.category?.select?.name || '', tags: (p.tags?.multi_select || []).map(t => t.name).join(','), status: p.status?.status?.name || p.status?.select?.name || 'Published', type: p.type?.select?.name || 'Post', date: p.date?.date?.start || '', cover: readNotionCoverUrl(p.cover) || '', pinned: readPinnedFromNotionProperties(p), download: readDownloadProperty(p.download), download_size: readRichTextProperty(p.download_size), content: cleanContent, rawBlocks: rawBlocks, editorBlocks: editorBlocks } });
     }
 
     if (req.method === 'PATCH') {
@@ -386,7 +387,10 @@ export default async function handler(req, res) {
       if (type !== undefined) props["type"] = { select: { name: type } };
       if (date !== undefined) props["date"] = date ? { date: { start: date } } : null;
       if (cover !== undefined) {
-          props["cover"] = (typeof cover === 'string' && cover.startsWith('http')) ? { url: cover } : { url: null };
+          const normalizedCover = normalizeMediaUrl(
+            typeof cover === 'string' ? cover : ''
+          );
+          props['cover'] = normalizedCover ? { url: normalizedCover } : { url: null };
       }
       if (download !== undefined) {
           props['download'] = buildDownloadProperty(download, targetProps['download']);
