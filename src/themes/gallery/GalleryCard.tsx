@@ -4,7 +4,7 @@ import CONFIG from '@/blog.config'
 import { galleryPostDownloadHref } from '@/src/lib/gallery/galleryDownloadPaths'
 import { galleryCardTagClass, galleryCardTitleClass } from './galleryFonts'
 
-const { TAG } = CONFIG.DEFAULT_SPECIAL_PAGES
+const { TAG, CATEGORY } = CONFIG.DEFAULT_SPECIAL_PAGES
 
 function tagHref(tag: Tag) {
   return `/${TAG}/${tag.id}`
@@ -30,6 +30,7 @@ export const GalleryCard = ({ post }: { post: Post }) => {
   const postHref = `/post/${post.slug}`
   const downloadHref = galleryPostDownloadHref(post.slug)
   const tags = post.tags?.filter((t) => t.name) ?? []
+  const categoryName = post.category?.name?.trim()
 
   return (
     <article className="group mx-auto flex w-full max-w-[calc(100%-5px)] flex-col">
@@ -49,11 +50,11 @@ export const GalleryCard = ({ post }: { post: Post }) => {
           </div>
         </Link>
 
-        <div className="mt-2 flex flex-col gap-0.5">
+        <div className="mt-2 flex flex-col">
           <div className="flex items-center justify-between gap-2">
             <Link
               href={postHref}
-              className={`min-w-0 flex-1 truncate hover:text-neutral-600 ${galleryCardTitleClass}`}
+              className={`min-w-0 flex-1 truncate leading-tight hover:text-neutral-600 ${galleryCardTitleClass}`}
             >
               {post.title}
             </Link>
@@ -68,7 +69,7 @@ export const GalleryCard = ({ post }: { post: Post }) => {
           </div>
 
           {tags.length > 0 ? (
-            <p className={`line-clamp-2 ${galleryCardTagClass}`}>
+            <p className={`mt-0.5 line-clamp-2 ${galleryCardTagClass}`}>
               {tags.map((tag, index) => (
                 <span key={tag.id}>
                   {index > 0 ? (
@@ -85,6 +86,18 @@ export const GalleryCard = ({ post }: { post: Post }) => {
                   </Link>
                 </span>
               ))}
+            </p>
+          ) : null}
+
+          {categoryName ? (
+            <p className={`mt-0.5 truncate ${galleryCardTagClass} text-neutral-400`}>
+              <Link
+                href={`/${CATEGORY}/${post.category?.id || ''}`}
+                onClick={(e) => e.stopPropagation()}
+                className="hover:text-neutral-600 hover:underline decoration-neutral-300 underline-offset-2"
+              >
+                {categoryName}
+              </Link>
             </p>
           ) : null}
         </div>

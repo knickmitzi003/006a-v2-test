@@ -66,14 +66,14 @@ export const GallerySidebar = () => {
         ))}
       </nav>
 
-      <div className="shrink-0 border-t border-neutral-200 px-5 py-5">
+      <div className="shrink-0 border-t border-neutral-200 px-4 py-5">
         <a
           href={GALLERY_LOGIN_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="block w-full rounded-md bg-black py-2.5 text-center text-[13px] font-bold text-white transition-all hover:bg-neutral-800 active:scale-[0.98] active:bg-neutral-900"
+          className="block w-full rounded-md bg-black py-2 text-center text-[13px] font-normal text-white transition-all hover:bg-neutral-800 active:scale-[0.98] active:bg-neutral-900"
         >
-          贩售机
+          购买
         </a>
       </div>
     </aside>

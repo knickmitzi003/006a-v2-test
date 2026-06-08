@@ -25,7 +25,7 @@ const morePath =
  * Gallery 侧栏结构：
  * Home → 首页
  * 导航：分类 | 标签 | 归档
- * 游客：使用指南 | 友链广场
+ * 游客：说明 | 更多
  */
 export const GALLERY_NAV_SECTIONS: GalleryNavSection[] = [
   {
@@ -42,8 +42,8 @@ export const GALLERY_NAV_SECTIONS: GalleryNavSection[] = [
   {
     title: '游客',
     items: [
-      { label: '使用指南', href: guidePath, icon: 'guide' },
-      { label: '友链', href: morePath, icon: 'models' },
+      { label: '说明', href: guidePath, icon: 'guide' },
+      { label: '更多', href: morePath, icon: 'models' },
     ],
   },
 ]
