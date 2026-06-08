@@ -85,13 +85,29 @@ function htmlMatchesTheme(html: string, themeCode: string): boolean {
 async function warmRevalidatedPage(
   origin: string,
   path: string,
-  options?: { expectedTheme?: string | null }
+  options?: {
+    expectedTheme?: string | null
+    /** 保存文章后校验首页 HTML 是否已含该 slug（应对 Notion 索引延迟） */
+    expectedSlug?: string | null
+    initialDelayMs?: number
+    maxAttempts?: number
+  }
 ): Promise<void> {
   const normalized = normalizePath(path)
   const expectedTheme = options?.expectedTheme?.trim()
-  const attempts = expectedTheme && normalized === '/' ? 5 : 1
+  const expectedSlug = options?.expectedSlug?.trim()
+  const needsSlugCheck = Boolean(expectedSlug && normalized === '/')
+  const maxAttempts =
+    options?.maxAttempts ??
+    (needsSlugCheck ? 4 : expectedTheme && normalized === '/' ? 5 : 1)
+  const initialDelayMs =
+    options?.initialDelayMs ?? (needsSlugCheck ? 1200 : 0)
 
-  for (let i = 0; i < attempts; i += 1) {
+  if (initialDelayMs > 0) {
+    await sleep(initialDelayMs)
+  }
+
+  for (let i = 0; i < maxAttempts; i += 1) {
     const bust = `_isr_warm=${Date.now()}-${i}`
     const joiner = normalized.includes('?') ? '&' : '?'
     const url = `${origin}${normalized}${joiner}${bust}`
@@ -100,6 +116,7 @@ async function warmRevalidatedPage(
       path: normalized,
       attempt: i + 1,
       expectedTheme: expectedTheme || null,
+      expectedSlug: expectedSlug || null,
     })
 
     try {
@@ -117,24 +134,38 @@ async function warmRevalidatedPage(
 
       if (!response.ok) {
         console.warn(`[warmRevalidatedPage] ${url} status ${response.status}`)
-      } else if (expectedTheme && normalized === '/') {
+      } else {
         const html = await response.text()
-        if (htmlMatchesTheme(html, expectedTheme)) {
-          console.log('[warmRevalidatedPage] homepage theme ok', expectedTheme)
+
+        if (needsSlugCheck) {
+          const slugPresent =
+            html.includes(`"/post/${expectedSlug}"`) ||
+            html.includes(`/post/${expectedSlug}`)
+          if (slugPresent) {
+            console.log('[warmRevalidatedPage] homepage contains slug', expectedSlug)
+            return
+          }
+          console.warn(
+            `[warmRevalidatedPage] / missing slug ${expectedSlug} on attempt ${i + 1}`
+          )
+        } else if (expectedTheme && normalized === '/') {
+          if (htmlMatchesTheme(html, expectedTheme)) {
+            console.log('[warmRevalidatedPage] homepage theme ok', expectedTheme)
+            return
+          }
+          console.warn(
+            `[warmRevalidatedPage] / theme mismatch on attempt ${i + 1}, expected ${expectedTheme}`
+          )
+        } else {
+          console.log('[warmRevalidatedPage] done', normalized)
           return
         }
-        console.warn(
-          `[warmRevalidatedPage] / theme mismatch on attempt ${i + 1}, expected ${expectedTheme}`
-        )
-      } else {
-        console.log('[warmRevalidatedPage] done', normalized)
-        return
       }
     } catch (error) {
       console.warn(`[warmRevalidatedPage] ${url} failed`, error)
     }
 
-    if (i < attempts - 1) {
+    if (i < maxAttempts - 1) {
       await sleep(2000)
     }
   }
@@ -360,6 +391,8 @@ export async function revalidateMany(
     warmPaths?: boolean
     origin?: string
     expectedTheme?: string | null
+    /** 保存/更新文章后用于首页预热校验 */
+    expectedSlug?: string | null
   }
 ): Promise<RevalidateResult[]> {
   const unique = Array.from(new Set(paths.map(normalizePath)))
@@ -369,6 +402,7 @@ export async function revalidateMany(
   const warmPaths = options?.warmPaths ?? false
   const origin = options?.origin
   const expectedTheme = options?.expectedTheme ?? null
+  const expectedSlug = options?.expectedSlug ?? null
 
   if (clearCaches || freshTheme) {
     clearContentBuildCaches()
@@ -381,6 +415,8 @@ export async function revalidateMany(
     ? [...unique].sort((a, b) => {
         if (a === '/') return -1
         if (b === '/') return 1
+        if (a.startsWith('/post/') && !b.startsWith('/post/')) return -1
+        if (b.startsWith('/post/') && !a.startsWith('/post/')) return 1
         return 0
       })
     : unique
@@ -390,9 +426,18 @@ export async function revalidateMany(
       try {
         await res.revalidate(path)
         if (warmPaths && origin) {
-          await warmRevalidatedPage(origin, path, {
-            expectedTheme: path === '/' ? expectedTheme : null,
-          })
+          const warmThisPath =
+            path === '/' ||
+            path.startsWith('/post/') ||
+            path.startsWith('/category/') ||
+            path.startsWith('/tag/') ||
+            path.startsWith('/archive')
+          if (warmThisPath) {
+            await warmRevalidatedPage(origin, path, {
+              expectedTheme: path === '/' ? expectedTheme : null,
+              expectedSlug: path === '/' ? expectedSlug : null,
+            })
+          }
         }
         results.push({ path, ok: true })
       } catch (error) {

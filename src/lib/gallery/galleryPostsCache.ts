@@ -3,21 +3,26 @@ import { getPosts } from '@/src/lib/notion/getBlogData'
 import { Post } from '@/src/types/blog'
 import { ApiScope } from '@/src/types/notion'
 
-let postsCache: { at: number; posts: Post[] } | null = null
-const POSTS_CACHE_MS = 60_000
+let postsInflight: Promise<Post[]> | null = null
 
 export function clearGalleryPostsCache(): void {
-  postsCache = null
+  postsInflight = null
 }
 
+/** 仅在同一次请求内去重；不跨 ISR 请求缓存，避免保存后仍返回旧列表 */
 export async function loadGalleryCachedPublishedPosts(): Promise<Post[]> {
-  if (postsCache && Date.now() - postsCache.at < POSTS_CACHE_MS) {
-    return postsCache.posts
+  if (postsInflight) {
+    return postsInflight
   }
-  const raw = await getPosts(ApiScope.Archive)
-  const posts = (await formatPosts(raw, FORMAT_POST_LIST_OPTIONS)).filter(
-    (p) => p.status === 'Published'
-  )
-  postsCache = { at: Date.now(), posts }
-  return posts
+
+  postsInflight = (async () => {
+    const raw = await getPosts(ApiScope.Archive)
+    return (await formatPosts(raw, FORMAT_POST_LIST_OPTIONS)).filter(
+      (p) => p.status === 'Published'
+    )
+  })().finally(() => {
+    postsInflight = null
+  })
+
+  return postsInflight
 }

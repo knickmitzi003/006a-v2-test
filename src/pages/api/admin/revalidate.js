@@ -28,6 +28,16 @@ function resolveTagIds(tagsString) {
     .map((name) => slugify(name))
 }
 
+/** 保存/删除等内容变更后应预热 ISR（否则只标记 stale，前台仍可能看到旧 HTML） */
+const CONTENT_CHANGE_SCOPES = new Set([
+  'post',
+  'page',
+  'delete',
+  'widget',
+  'friends',
+  'gallery-ad',
+])
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' })
@@ -97,6 +107,12 @@ export default async function handler(req, res) {
       paths = await collectGalleryAdRevalidatePaths()
     } else if (scope === 'delete' && slug) {
       paths = await collectDeleteRevalidatePaths(slug, { categoryId, tagIds })
+    } else if (scope === 'post' && slug) {
+      paths = await collectPostRevalidatePaths(slug, {
+        categoryId,
+        tagIds,
+        previousSlug,
+      })
     } else if (scope === 'page' && slug) {
       paths = collectPageRevalidatePaths(slug, { previousSlug })
     } else if (scope === 'friends') {
@@ -123,15 +139,24 @@ export default async function handler(req, res) {
         pathCount: paths.length,
         origin: resolveRevalidateOrigin(req),
         expectedTheme: expectedTheme || null,
+        expectedSlug: slug || null,
       })
     }
+
+    const shouldWarmPaths =
+      Boolean(warmPaths) || CONTENT_CHANGE_SCOPES.has(scope)
+    const warmOrigin = shouldWarmPaths ? resolveRevalidateOrigin(req) : undefined
 
     const results = await revalidateMany(res, paths, {
       freshTheme,
       clearCaches: scope === 'batch' ? clearCaches : false,
-      warmPaths: Boolean(warmPaths),
-      origin: warmPaths ? resolveRevalidateOrigin(req) : undefined,
+      warmPaths: shouldWarmPaths,
+      origin: warmOrigin,
       expectedTheme: expectedTheme || null,
+      expectedSlug:
+        shouldWarmPaths && slug && scope === 'post'
+          ? String(slug).trim()
+          : null,
     })
     const failed = results.filter((item) => !item.ok)
     const succeeded = results.filter((item) => item.ok)
