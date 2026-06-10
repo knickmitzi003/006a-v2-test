@@ -40,9 +40,7 @@ export function GalleryArticlePage({
             <div className="mb-8" />
           )}
 
-          <div
-            className={`${galleryProseClass} rounded-sm border border-neutral-200 bg-white px-6 py-8 md:px-10`}
-          >
+          <div className={galleryProseClass}>
             <BlockRender blocks={blocks} />
           </div>
         </article>

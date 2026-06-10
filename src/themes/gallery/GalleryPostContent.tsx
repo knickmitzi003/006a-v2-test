@@ -14,7 +14,7 @@ type GalleryPostContentProps = {
   blocks: BlockResponse[]
 }
 
-const proseWrapClass = `${galleryProseClass} rounded-sm border border-neutral-200 bg-white px-6 py-8 md:px-10`
+const proseBorderedClass = `${galleryProseClass} rounded-sm border border-neutral-200 bg-white px-6 py-8 md:px-10`
 
 export function GalleryPostContent({ postSlug, blocks }: GalleryPostContentProps) {
   const { ready, hasGallery } = useGalleryHasImages(postSlug)
@@ -27,7 +27,7 @@ export function GalleryPostContent({ postSlug, blocks }: GalleryPostContentProps
 
       {ready && showBody ? (
         <div className={hasGallery ? 'mt-8' : ''}>
-          <div className={proseWrapClass}>
+          <div className={hasGallery ? proseBorderedClass : galleryProseClass}>
             <BlockRender blocks={bodyBlocks} />
           </div>
         </div>
