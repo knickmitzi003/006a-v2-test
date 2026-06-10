@@ -127,7 +127,7 @@ export function GalleryCategoryIndex({
           </div>
         ) : (
           <>
-            <div className={`${galleryCategoryGridClass} px-6`}>
+            <div className={galleryCategoryGridClass}>
               {pageItems.map((cat) => (
                 <Link
                   key={cat.id}
