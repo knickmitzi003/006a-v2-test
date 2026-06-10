@@ -2,6 +2,7 @@ import { BlockDataType, BlockEnum, BlockType } from '@/src/types/blog'
 import {
   BlockRenderProvider,
   BlockRenderVariant,
+  useBlockRenderVariant,
 } from './BlockRenderContext'
 import { EncryptedCallout } from './EncryptedCallout' 
 import {
@@ -99,27 +100,36 @@ const getBlockComponent = (blockType: BlockType) => {
 
 export const BlockRender = ({
   blocks,
-  variant = 'default',
+  variant,
 }: {
   blocks: BlockDataType[]
   variant?: BlockRenderVariant
 }) => {
+  const parentVariant = useBlockRenderVariant()
+  const resolvedVariant = variant ?? parentVariant
+
   return (
-    <BlockRenderProvider variant={variant}>
+    <BlockRenderProvider variant={resolvedVariant}>
       {blocks.map((block) => {
         const type = block.type ?? BlockEnum.unsupported
         const Block = getBlockComponent(type)
         if (type === BlockEnum.table_row || type === BlockEnum.column) {
           return (
             <Block key={block.id} block={block}>
-              <BlockRender blocks={block.children as BlockDataType[]} />
+              <BlockRender
+                blocks={block.children as BlockDataType[]}
+                variant={resolvedVariant}
+              />
             </Block>
           )
         }
         return (
           <div key={block.id} className="py-2">
             <Block block={block}>
-              <BlockRender blocks={block.children as BlockDataType[]} />
+              <BlockRender
+                blocks={block.children as BlockDataType[]}
+                variant={resolvedVariant}
+              />
             </Block>
           </div>
         )
