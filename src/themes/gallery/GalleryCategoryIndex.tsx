@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useEffect, useMemo, useState } from 'react'
 import { GalleryBreadcrumb } from './GalleryBreadcrumb'
-import { GalleryCategoryMarker } from './GalleryCategoryMarker'
 import { GalleryPageSearch } from './GalleryPageSearch'
 import { GalleryPagination } from './GalleryPagination'
 import { GALLERY_LIST_PAGE_SIZE } from './galleryConstants'
@@ -134,7 +133,6 @@ export function GalleryCategoryIndex({
                   href={`/${CATEGORY}/${cat.id}`}
                   className="gallery-category-item font-gallery"
                 >
-                  <GalleryCategoryMarker />
                   <span className="gallery-category-item__name line-clamp-2">
                     {cat.name}
                   </span>
