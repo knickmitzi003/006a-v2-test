@@ -1,9 +1,12 @@
+'use client'
+
 import Link from 'next/link'
 import {
   GalleryRecommendPost,
   withoutGalleryAnnouncement,
 } from '@/src/lib/gallery/galleryRecommendations'
 import { galleryCardTitleClass, galleryRecommendGridClass } from './galleryFonts'
+import { GalleryCardLoading, useGalleryNavLoading } from './galleryNavLoading'
 
 function formatPostDate(iso: string) {
   if (!iso) return ''
@@ -24,6 +27,7 @@ export function GalleryPostRecommendations({
   posts,
 }: GalleryPostRecommendationsProps) {
   const items = withoutGalleryAnnouncement(posts, posts.length)
+  const { isLoading, startNav } = useGalleryNavLoading()
   if (!items.length) return null
 
   return (
@@ -36,9 +40,10 @@ export function GalleryPostRecommendations({
           <Link
             key={item.slug}
             href={`/post/${item.slug}`}
+            onClick={startNav(item.slug)}
             className="group block"
           >
-            <div className="aspect-[5/2] overflow-hidden rounded-lg bg-neutral-100">
+            <div className="relative aspect-[5/2] overflow-hidden rounded-lg bg-neutral-100">
               {item.coverSrc ? (
                 <img
                   src={item.coverSrc}
@@ -51,6 +56,7 @@ export function GalleryPostRecommendations({
                   P
                 </div>
               )}
+              {isLoading(item.slug) ? <GalleryCardLoading /> : null}
             </div>
             <p
               className={`mt-2.5 line-clamp-2 group-hover:text-neutral-600 ${galleryCardTitleClass}`}

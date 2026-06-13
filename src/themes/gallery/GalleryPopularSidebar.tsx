@@ -6,6 +6,7 @@ import {
   GalleryRecommendPost,
   withoutGalleryAnnouncement,
 } from '@/src/lib/gallery/galleryRecommendations'
+import { GalleryCardLoading, useGalleryNavLoading } from './galleryNavLoading'
 
 /** Epic 侧边栏：左侧横版缩略图 + 右侧标题/日期（标题顶对齐封面） */
 const THUMB_CLASS = 'w-[108px] shrink-0 overflow-hidden rounded-[4px] bg-neutral-100'
@@ -33,6 +34,7 @@ export function GalleryPopularSidebar({
   const [posts, setPosts] = useState(() =>
     withoutGalleryAnnouncement(initialPosts)
   )
+  const { isLoading, startNav } = useGalleryNavLoading()
 
   useEffect(() => {
     setPosts(withoutGalleryAnnouncement(initialPosts))
@@ -70,6 +72,7 @@ export function GalleryPopularSidebar({
           <li key={item.slug}>
             <Link
               href={`/post/${item.slug}`}
+              onClick={startNav(item.slug)}
               className="group flex items-start gap-3.5"
             >
               <div className={THUMB_CLASS}>
@@ -86,6 +89,7 @@ export function GalleryPopularSidebar({
                       P
                     </div>
                   )}
+                  {isLoading(item.slug) ? <GalleryCardLoading /> : null}
                 </div>
               </div>
               <div className="min-w-0 flex-1">

@@ -7,6 +7,7 @@ import {
   galleryCardTagClass,
   galleryCardTitleClass,
 } from './galleryFonts'
+import { GalleryCardLoading, useGalleryNavLoading } from './galleryNavLoading'
 
 const { TAG, CATEGORY } = CONFIG.DEFAULT_SPECIAL_PAGES
 
@@ -35,10 +36,16 @@ export const GalleryCard = ({ post }: { post: Post }) => {
   const downloadHref = galleryPostDownloadHref(post.slug)
   const tags = post.tags?.filter((t) => t.name) ?? []
   const categoryName = post.category?.name?.trim()
+  const { isLoading, startNav } = useGalleryNavLoading()
+  const loading = isLoading(post.slug)
 
   return (
     <article className="group flex w-full flex-col">
-        <Link href={postHref} className="block overflow-hidden rounded-md">
+        <Link
+          href={postHref}
+          onClick={startNav(post.slug)}
+          className="block overflow-hidden rounded-md"
+        >
           <div className="relative aspect-[10/13.35] bg-neutral-100">
             {cover ? (
               <img
@@ -51,6 +58,7 @@ export const GalleryCard = ({ post }: { post: Post }) => {
                 P
               </div>
             )}
+            {loading ? <GalleryCardLoading /> : null}
           </div>
         </Link>
 
@@ -58,6 +66,7 @@ export const GalleryCard = ({ post }: { post: Post }) => {
           <div className="flex items-center justify-between gap-2">
             <Link
               href={postHref}
+              onClick={startNav(post.slug)}
               className={`min-w-0 flex-1 truncate leading-tight hover:text-neutral-600 ${galleryCardTitleClass}`}
             >
               {post.title}

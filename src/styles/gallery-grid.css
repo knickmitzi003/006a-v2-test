@@ -81,3 +81,41 @@
   column-gap: 1.25rem;
   row-gap: 2rem;
 }
+
+/* —— 卡片点击加载态（单卡） —— */
+.gallery-card-loading {
+  animation: gallery-card-loading-in 0.12s ease both;
+}
+
+@keyframes gallery-card-loading-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.gallery-card-spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  animation: gallery-card-spin 0.7s linear infinite;
+}
+
+@keyframes gallery-card-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-card-loading {
+    animation: none !important;
+  }
+  .gallery-card-spinner {
+    animation-duration: 1.4s;
+  }
+}
