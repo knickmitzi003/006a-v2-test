@@ -311,24 +311,24 @@ const GlobalStyle = () => (
     .loader-lock-hint { font-size: 12px; color: #888; margin-top: 18px; text-align: center; max-width: 420px; line-height: 1.6; }
     .loader-progress-track { margin-top: 18px; width: min(320px, 80vw); height: 6px; background: #2a2a2e; border-radius: 999px; overflow: hidden; border: 1px solid #333; }
     .loader-progress-bar { height: 100%; background: linear-gradient(90deg, #adff2f, #84cc16); border-radius: 999px; transition: width 0.35s ease; }
-    .pubq { position: fixed; top: 16px; right: 16px; z-index: 99998; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 10px; }
-    .pubq-head { display: flex; align-items: center; justify-content: space-between; background: #18181c; border: 1px solid #333; border-radius: 10px; padding: 8px 12px; font-size: 12px; color: #aaa; letter-spacing: 0.5px; }
-    .pubq-head b { color: #fff; font-size: 12px; }
-    .pubq-list { display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 90px); overflow-y: auto; padding-right: 2px; }
-    .pubq-card { background: #202024; border: 1px solid #333; border-radius: 12px; padding: 11px 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
+    .pubq { position: fixed; top: 96px; right: 12px; z-index: 99998; width: min(218px, calc(100vw - 24px)); display: flex; flex-direction: column; gap: 5px; }
+    .pubq-head { display: flex; align-items: center; justify-content: space-between; background: #18181c; border: 1px solid #333; border-radius: 8px; padding: 5px 9px; font-size: 10px; color: #aaa; letter-spacing: 0.3px; }
+    .pubq-head b { color: #fff; font-size: 10px; }
+    .pubq-list { display: flex; flex-direction: column; gap: 5px; max-height: calc(100vh - 130px); overflow-y: auto; padding-right: 2px; }
+    .pubq-card { background: #202024; border: 1px solid #333; border-radius: 9px; padding: 7px 9px; box-shadow: 0 8px 22px rgba(0,0,0,0.4); }
     .pubq-card.is-err { border-color: rgba(255,77,79,0.5); }
     .pubq-card.is-ok { border-color: rgba(173,255,47,0.4); }
-    .pubq-row { display: flex; align-items: center; gap: 8px; }
-    .pubq-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pubq-state { font-size: 11px; white-space: nowrap; }
-    .pubq-x { background: none; border: none; color: #777; font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px; width: auto; }
+    .pubq-row { display: flex; align-items: center; gap: 6px; }
+    .pubq-title { flex: 1; min-width: 0; font-size: 11px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pubq-state { font-size: 9px; white-space: nowrap; }
+    .pubq-x { background: none; border: none; color: #777; font-size: 14px; line-height: 1; cursor: pointer; padding: 0 1px; width: auto; }
     .pubq-x:hover { color: #fff; }
-    .pubq-retry { background: none; border: 1px solid #555; color: #ddd; font-size: 11px; border-radius: 6px; padding: 2px 8px; cursor: pointer; width: auto; }
+    .pubq-retry { background: none; border: 1px solid #555; color: #ddd; font-size: 10px; border-radius: 5px; padding: 1px 6px; cursor: pointer; width: auto; }
     .pubq-retry:hover { border-color: greenyellow; color: greenyellow; }
-    .pubq-spin { width: 14px; height: 14px; border: 2px solid #333; border-top-color: greenyellow; border-radius: 50%; animation: imgspin 0.8s linear infinite; flex: none; }
-    .pubq-detail { margin-top: 6px; font-size: 11px; color: #999; }
+    .pubq-spin { width: 11px; height: 11px; border: 2px solid #333; border-top-color: greenyellow; border-radius: 50%; animation: imgspin 0.8s linear infinite; flex: none; }
+    .pubq-detail { margin-top: 5px; font-size: 10px; color: #999; }
     .pubq-detail.is-err { color: #ff6b6d; word-break: break-word; }
-    .pubq-bar-track { margin-top: 8px; height: 5px; background: #2a2a2e; border-radius: 999px; overflow: hidden; }
+    .pubq-bar-track { margin-top: 6px; height: 4px; background: #2a2a2e; border-radius: 999px; overflow: hidden; }
     .pubq-bar { height: 100%; background: linear-gradient(90deg, #adff2f, #84cc16); border-radius: 999px; transition: width 0.3s ease; }
     .pubq-bar.is-err { background: #ff4d4f; }
     .pubq-bar-indet { height: 100%; width: 40%; background: linear-gradient(90deg, #adff2f, #84cc16); border-radius: 999px; animation: pubqIndet 1.15s ease-in-out infinite; }
