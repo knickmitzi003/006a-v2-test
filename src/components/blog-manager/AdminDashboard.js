@@ -1006,12 +1006,12 @@ function pubqStateText(job) {
   if (job.status === 'error') return '发布失败';
   // running
   if (job.phase === 'media') {
-    return job.progress ? `上传正文图片 ${job.progress.done}/${job.progress.total}` : '准备上传图片…';
+    return job.progress ? `上传正文内容 ${job.progress.done}/${job.progress.total}` : '准备上传图片…';
   }
   if (job.phase === 'gallery') {
     return job.progress?.total ? `上传图库 ${job.progress.done}/${job.progress.total}` : '同步图库…';
   }
-  if (job.phase === 'post') return '写入文章…';
+  if (job.phase === 'post') return '正在写入文章…';
   return '处理中…';
 }
 
