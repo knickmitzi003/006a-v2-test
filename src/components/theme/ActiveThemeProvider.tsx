@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -34,8 +35,15 @@ export function ActiveThemeProvider({
   )
   const [liveTheme, setLiveTheme] = useState<ThemeId>(staticTheme)
 
+  // 仅当本页静态主题比当前 liveTheme「更新」时才采纳：
+  // - 首屏 SSR 时两者相同，安全水合
+  // - 跨页导航若命中过期 ISR 页（activeTheme 仍是旧主题），不要用它覆盖已解析的 liveTheme，
+  //   否则会先闪一下旧主题再被接口纠正回来。
+  const hasResolvedLive = useRef(false)
   useEffect(() => {
-    setLiveTheme(staticTheme)
+    if (!hasResolvedLive.current) {
+      setLiveTheme(staticTheme)
+    }
   }, [staticTheme])
 
   useEffect(() => {
@@ -48,7 +56,10 @@ export function ActiveThemeProvider({
         const res = await fetch('/api/public/active-theme', { cache: 'no-store' })
         if (!res.ok || cancelled) return
         const data = (await res.json()) as { themeId?: ThemeId }
-        if (data.themeId) setLiveTheme(data.themeId)
+        if (data.themeId) {
+          hasResolvedLive.current = true
+          setLiveTheme(data.themeId)
+        }
       } catch (error) {
         console.warn('[ActiveThemeProvider] fetch failed', error)
       }
