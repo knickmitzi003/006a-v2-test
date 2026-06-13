@@ -311,6 +311,28 @@ const GlobalStyle = () => (
     .loader-lock-hint { font-size: 12px; color: #888; margin-top: 18px; text-align: center; max-width: 420px; line-height: 1.6; }
     .loader-progress-track { margin-top: 18px; width: min(320px, 80vw); height: 6px; background: #2a2a2e; border-radius: 999px; overflow: hidden; border: 1px solid #333; }
     .loader-progress-bar { height: 100%; background: linear-gradient(90deg, #adff2f, #84cc16); border-radius: 999px; transition: width 0.35s ease; }
+    .pubq { position: fixed; top: 16px; right: 16px; z-index: 99998; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 10px; }
+    .pubq-head { display: flex; align-items: center; justify-content: space-between; background: #18181c; border: 1px solid #333; border-radius: 10px; padding: 8px 12px; font-size: 12px; color: #aaa; letter-spacing: 0.5px; }
+    .pubq-head b { color: #fff; font-size: 12px; }
+    .pubq-list { display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 90px); overflow-y: auto; padding-right: 2px; }
+    .pubq-card { background: #202024; border: 1px solid #333; border-radius: 12px; padding: 11px 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
+    .pubq-card.is-err { border-color: rgba(255,77,79,0.5); }
+    .pubq-card.is-ok { border-color: rgba(173,255,47,0.4); }
+    .pubq-row { display: flex; align-items: center; gap: 8px; }
+    .pubq-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pubq-state { font-size: 11px; white-space: nowrap; }
+    .pubq-x { background: none; border: none; color: #777; font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px; width: auto; }
+    .pubq-x:hover { color: #fff; }
+    .pubq-retry { background: none; border: 1px solid #555; color: #ddd; font-size: 11px; border-radius: 6px; padding: 2px 8px; cursor: pointer; width: auto; }
+    .pubq-retry:hover { border-color: greenyellow; color: greenyellow; }
+    .pubq-spin { width: 14px; height: 14px; border: 2px solid #333; border-top-color: greenyellow; border-radius: 50%; animation: imgspin 0.8s linear infinite; flex: none; }
+    .pubq-detail { margin-top: 6px; font-size: 11px; color: #999; }
+    .pubq-detail.is-err { color: #ff6b6d; word-break: break-word; }
+    .pubq-bar-track { margin-top: 8px; height: 5px; background: #2a2a2e; border-radius: 999px; overflow: hidden; }
+    .pubq-bar { height: 100%; background: linear-gradient(90deg, #adff2f, #84cc16); border-radius: 999px; transition: width 0.3s ease; }
+    .pubq-bar.is-err { background: #ff4d4f; }
+    .pubq-bar-indet { height: 100%; width: 40%; background: linear-gradient(90deg, #adff2f, #84cc16); border-radius: 999px; animation: pubqIndet 1.15s ease-in-out infinite; }
+    @keyframes pubqIndet { 0% { margin-left: -42%; } 100% { margin-left: 102%; } }
     .loader { display: flex; margin: 0.25em 0; }
     .dash { animation: dashArray 2s ease-in-out infinite, dashOffset 2s linear infinite; }
     @keyframes dashArray { 0% { stroke-dasharray: 0 1 359 0; } 50% { stroke-dasharray: 0 359 1 0; } 100% { stroke-dasharray: 359 1 0 0; } }
@@ -973,6 +995,82 @@ const FullScreenLoader = ({ phase, progress }) => {
       {isTheme ? (
         <div className="loader-lock-hint">主题切换期间请勿操作后台，以免数据冲突</div>
       ) : null}
+    </div>
+  );
+};
+
+/** 发布队列：每篇任务的阶段文案 */
+function pubqStateText(job) {
+  if (job.status === 'queued') return '排队中';
+  if (job.status === 'success') return '已完成';
+  if (job.status === 'error') return '发布失败';
+  // running
+  if (job.phase === 'media') {
+    return job.progress ? `上传正文图片 ${job.progress.done}/${job.progress.total}` : '准备上传图片…';
+  }
+  if (job.phase === 'gallery') {
+    return job.progress?.total ? `上传图库 ${job.progress.done}/${job.progress.total}` : '同步图库…';
+  }
+  if (job.phase === 'post') return '写入文章…';
+  return '处理中…';
+}
+
+/** 发布队列面板：固定在右上角，后台逐条处理，不阻塞编辑 */
+const PublishQueuePanel = ({ jobs, onRetry, onDismiss }) => {
+  if (!jobs || jobs.length === 0) return null;
+  const active = jobs.filter((j) => j.status === 'queued' || j.status === 'running').length;
+
+  return (
+    <div className="pubq">
+      <div className="pubq-head">
+        <span>发布队列{active > 0 ? ` · 进行中 ${active}` : ''}</span>
+        <b>{jobs.length}</b>
+      </div>
+      <div className="pubq-list">
+        {jobs.map((job) => {
+          const determinate = job.progress && job.progress.total > 0;
+          const pct = determinate
+            ? Math.min(100, Math.round((job.progress.done / job.progress.total) * 100))
+            : 0;
+          const stateColor =
+            job.status === 'error' ? '#ff6b6d'
+            : job.status === 'success' ? 'greenyellow'
+            : job.status === 'queued' ? '#999'
+            : 'greenyellow';
+          return (
+            <div
+              key={job.id}
+              className={`pubq-card${job.status === 'error' ? ' is-err' : job.status === 'success' ? ' is-ok' : ''}`}
+            >
+              <div className="pubq-row">
+                {job.status === 'running' && <span className="pubq-spin" />}
+                <span className="pubq-title" title={job.title}>{job.title}</span>
+                <span className="pubq-state" style={{ color: stateColor }}>{pubqStateText(job)}</span>
+                {job.status === 'error' && (
+                  <button className="pubq-retry" onClick={() => onRetry(job.id)}>重试</button>
+                )}
+                {(job.status === 'success' || job.status === 'error') && (
+                  <button className="pubq-x" title="移除" onClick={() => onDismiss(job.id)}>×</button>
+                )}
+              </div>
+              {(job.status === 'running' || job.status === 'success') && (
+                <div className="pubq-bar-track">
+                  {job.status === 'success' ? (
+                    <div className="pubq-bar" style={{ width: '100%' }} />
+                  ) : determinate ? (
+                    <div className="pubq-bar" style={{ width: `${pct}%` }} />
+                  ) : (
+                    <div className="pubq-bar-indet" />
+                  )}
+                </div>
+              )}
+              {job.status === 'error' && job.error && (
+                <div className="pubq-detail is-err">{job.error}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
@@ -1876,6 +1974,8 @@ const [mounted, setMounted] = useState(false);
   const [galleryDirty, setGalleryDirty] = useState(false);
   const [savePhase, setSavePhase] = useState(''); // '' | 'media' | 'post' | 'gallery'
   const [saveProgress, setSaveProgress] = useState(null); // { done, total }
+  const [publishQueue, setPublishQueue] = useState([]); // 后台发布队列
+  const queueRunningRef = useRef(false);
   const [galleryStorageStats, setGalleryStorageStats] = useState(null);
   const [galleryStorageLoading, setGalleryStorageLoading] = useState(false);
   const [galleryStorageError, setGalleryStorageError] = useState('');
@@ -1978,12 +2078,12 @@ const [mounted, setMounted] = useState(false);
       return;
     }
 
-    handleSave();
+    enqueuePublish();
   };
 
   const confirmCoverAndSave = () => {
     closeCoverModal();
-    setTimeout(() => handleSave(), 260);
+    setTimeout(() => enqueuePublish(), 260);
   };
 
   // 🟢 3. 主题状态计算
@@ -2412,156 +2512,206 @@ const [mounted, setMounted] = useState(false);
     finally { setCoverUploading(false); }
   };
   
-  const handleSave = async () => {
-    if (isThemeLoading) return alert("请等待当前任务完成...");
+  // ============ 后台发布队列 ============
+  // 更新队列中某条任务的状态/进度
+  const updateJob = useCallback((id, patch) => {
+    setPublishQueue((q) =>
+      q.map((job) => (job.id === id ? { ...job, ...patch } : job))
+    );
+  }, []);
 
-    // 🧩 组件(Widget)：仅更新 标题/摘要/头像(cover)，不触碰正文块，避免误改导致部署失败
-    if (form.type === 'Widget') {
-      setLoading(true);
-      try {
+  const dismissJob = useCallback((id) => {
+    setPublishQueue((q) => q.filter((job) => job.id !== id));
+  }, []);
+
+  const retryJob = useCallback((id) => {
+    setPublishQueue((q) =>
+      q.map((job) =>
+        job.id === id
+          ? { ...job, status: 'queued', phase: '', progress: null, error: '' }
+          : job
+      )
+    );
+  }, []);
+
+  // 实际执行一条发布任务：完全基于任务快照 payload，不依赖当前编辑器状态
+  const runPublishJob = useCallback(async (job) => {
+    const { payload } = job;
+    updateJob(job.id, { status: 'running', phase: '', progress: null, error: '' });
+
+    try {
+      // 🧩 组件(Widget)：仅更新 标题/摘要/头像(cover)
+      if (payload.isWidget) {
+        updateJob(job.id, { phase: 'post' });
         const res = await fetch('/api/admin/post', {
           method: 'POST',
           body: JSON.stringify({
-            id: currentId,
-            title: form.title,
-            excerpt: form.excerpt,
-            cover: form.cover || '',
-            slug: form.slug,
+            id: payload.currentId,
+            title: payload.form.title,
+            excerpt: payload.form.excerpt,
+            cover: payload.form.cover || '',
+            slug: payload.form.slug,
             type: 'Widget',
-            status: form.status || 'Published',
+            status: payload.form.status || 'Published',
           }),
         });
         const d = await res.json();
-        if (!d.success) alert(`❌ 保存失败！\n\n错误信息:\n${d.error}`);
-        else {
-          alert("✅ 保存成功！");
-          setView('list');
-          fetchPosts();
-          triggerShellBlogRefresh().then((rev) =>
-            showRevalidateFeedback(rev, showAdminToast)
-          );
-        }
-      } catch (e) { alert('网络错误: ' + e.message); }
-      finally { setLoading(false); }
-      return;
-    }
-
-    setLoading(true);
-    setSaveProgress(null);
-
-    let blocksForSave = editorBlocksRef.current;
-    const pendingMediaCount = countPendingEditorMedia(blocksForSave);
-    const pendingGalleryCount = countPendingGalleryItems(galleryItems);
-    const willSyncGallery =
-      !isSimpleCustomPage(form?.slug) && (galleryDirty || pendingGalleryCount > 0);
-
-    if (pendingMediaCount > 0) {
-      setSavePhase('media');
-      setSaveProgress({ done: 0, total: pendingMediaCount });
-    } else {
-      setSavePhase('post');
-      setSaveProgress(null);
-    }
-
-    if (pendingMediaCount > 0) {
-      try {
-        blocksForSave = await flushEditorBlocksMedia(blocksForSave, {
-          onProgress: ({ done, total }) => setSaveProgress({ done, total }),
-        });
-        setEditorBlocks(blocksForSave);
-      } catch (e) {
-        alert(`正文图片上传失败：\n\n${e.message}\n\n请重试保存。`);
-        setLoading(false);
-        setSavePhase('');
-        setSaveProgress(null);
+        if (!d.success) throw new Error(d.error || '保存失败');
+        updateJob(job.id, { status: 'success', phase: '', progress: null });
+        fetchPosts();
+        triggerShellBlogRefresh().then((rev) =>
+          showRevalidateFeedback(rev, showAdminToast)
+        );
         return;
       }
-    }
 
-    setSavePhase('post');
-    setSaveProgress(null);
+      let blocksForSave = payload.blocks;
 
-    const fullContent = blocksToMarkdown(blocksForSave);
+      // 1) 上传正文图片
+      if (payload.pendingMediaCount > 0) {
+        updateJob(job.id, {
+          phase: 'media',
+          progress: { done: 0, total: payload.pendingMediaCount },
+        });
+        blocksForSave = await flushEditorBlocksMedia(blocksForSave, {
+          onProgress: ({ done, total }) =>
+            updateJob(job.id, { progress: { done, total } }),
+        });
+      }
 
-    const blocksData = serializeBlocksForSave(blocksForSave);
+      // 2) 写入 Notion 文章
+      updateJob(job.id, { phase: 'post', progress: null });
+      const fullContent = blocksToMarkdown(blocksForSave);
+      const blocksData = serializeBlocksForSave(blocksForSave);
+      const autoCover = resolveAutoCover(blocksForSave);
+      const coverForSave =
+        autoCover ||
+        (typeof payload.form.cover === 'string' ? payload.form.cover.trim() : '');
 
-    const autoCover = resolveAutoCover(blocksForSave);
-    const coverForSave =
-      autoCover || (typeof form.cover === 'string' ? form.cover.trim() : '');
-
-    try {
       const res = await fetch('/api/admin/post', {
         method: 'POST',
-        body: JSON.stringify({ 
-          ...form, 
+        body: JSON.stringify({
+          ...payload.form,
           cover: coverForSave,
-          // 🟢 修复：强制提交 Published 状态
-          status: 'Published', 
-          content: fullContent, 
+          status: 'Published',
+          content: fullContent,
           blocksData,
-          id: currentId,
-          type: form.type || 'Post',
-          previousSlug: editingSlugRef.current || '',
-        })
+          id: payload.currentId,
+          type: payload.form.type || 'Post',
+          previousSlug: payload.previousSlug || '',
+        }),
       });
       const d = await res.json();
-      
-      if (!d.success) {
-        alert(`❌ 保存失败！\n\n错误信息:\n${d.error}`);
-      } else {
-        const newId = d.id || currentId;
-        if (newId && newId !== currentId) setCurrentId(newId);
-        const previousSlug = editingSlugRef.current;
+      if (!d.success) throw new Error(d.error || '保存失败');
 
-        // Notion 写入完成后立刻刷 shell（与手动刷新相同），再传图库
-        const shellRev = await triggerShellBlogRefresh({ contentChange: true });
-        showRevalidateFeedback(shellRev, showAdminToast);
+      const newId = d.id || payload.currentId;
 
-        if (willSyncGallery) {
-          setSavePhase('gallery');
-          if (pendingGalleryCount > 0) {
-            setSaveProgress({ done: 0, total: pendingGalleryCount });
-          } else {
-            setSaveProgress(null);
-          }
-          try {
-            const updated = await flushGalleryUploads({
-              slug: form.slug,
-              postTitle: form.title,
-              postNotionId: newId,
-              items: galleryItems,
-              onProgress: ({ done, total }) => setSaveProgress({ done, total }),
-            });
-            setGalleryItems(updated);
-            setGalleryDirty(false);
-          } catch (e) {
-            alert(`✅ 文章已保存，但图库上传失败：\n\n${e.message}\n\n请留在本页重试保存。`);
-            return;
-          }
-        }
+      // Notion 写入完成后立刻刷 shell（与手动刷新相同），再传图库
+      const shellRev = await triggerShellBlogRefresh({ contentChange: true });
+      showRevalidateFeedback(shellRev, showAdminToast);
 
-        alert("✅ 保存成功！");
-        editingSlugRef.current = form.slug;
-        resetGalleryItems();
-        setView('list');
-        fetchPosts();
-        loadGalleryStorage();
-
-        void triggerContentRevalidation({
-          scope: 'post',
-          slug: form.slug,
-          category: form.category || '',
-          tags: form.tags || '',
-          previousSlug,
-        }).catch((e) => console.warn('文章内页增量刷新失败', e));
+      // 3) 上传图库
+      if (payload.willSyncGallery) {
+        updateJob(job.id, {
+          phase: 'gallery',
+          progress:
+            payload.pendingGalleryCount > 0
+              ? { done: 0, total: payload.pendingGalleryCount }
+              : null,
+        });
+        await flushGalleryUploads({
+          slug: payload.form.slug,
+          postTitle: payload.form.title,
+          postNotionId: newId,
+          items: payload.galleryItems,
+          onProgress: ({ done, total }) =>
+            updateJob(job.id, { progress: { done, total } }),
+        });
       }
+
+      updateJob(job.id, { status: 'success', phase: '', progress: null });
+      fetchPosts();
+      loadGalleryStorage();
+
+      void triggerContentRevalidation({
+        scope: 'post',
+        slug: payload.form.slug,
+        category: payload.form.category || '',
+        tags: payload.form.tags || '',
+        previousSlug: payload.previousSlug || '',
+      }).catch((e) => console.warn('文章内页增量刷新失败', e));
+
+      // 成功项稍后自动移除，保持队列整洁
+      setTimeout(() => dismissJob(job.id), 6000);
     } catch (e) {
-      alert('网络错误: ' + e.message);
-    } finally {
-      setLoading(false);
-      setSavePhase('');
-      setSaveProgress(null);
+      updateJob(job.id, {
+        status: 'error',
+        phase: '',
+        progress: null,
+        error: e?.message || '发布失败',
+      });
     }
+  }, [updateJob, dismissJob]);
+
+  // 队列调度：一次只跑一条，跑完自动取下一条
+  useEffect(() => {
+    if (queueRunningRef.current) return;
+    const next = publishQueue.find((job) => job.status === 'queued');
+    if (!next) return;
+    queueRunningRef.current = true;
+    runPublishJob(next).finally(() => {
+      queueRunningRef.current = false;
+      // 触发一次状态更新，让 effect 重新评估下一条
+      setPublishQueue((q) => [...q]);
+    });
+  }, [publishQueue, runPublishJob]);
+
+  // 点击发布：抓取当前编辑器快照入队，立刻清空编辑器以便继续下一篇
+  const enqueuePublish = () => {
+    if (isThemeLoading) return alert('请等待当前任务完成...');
+
+    const isWidget = form.type === 'Widget';
+    const blocks = editorBlocksRef.current || [];
+    const pendingMediaCount = isWidget ? 0 : countPendingEditorMedia(blocks);
+    const pendingGalleryCount = isWidget ? 0 : countPendingGalleryItems(galleryItems);
+    const willSyncGallery =
+      !isWidget &&
+      !isSimpleCustomPage(form?.slug) &&
+      (galleryDirty || pendingGalleryCount > 0);
+
+    const job = {
+      id: `job-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      title: (form.title || '').trim() || '未命名',
+      status: 'queued',
+      phase: '',
+      progress: null,
+      error: '',
+      payload: {
+        isWidget,
+        // 注意：保留对象/File 引用，不做 JSON 克隆（pending 图片含 File，无法序列化）
+        form: { ...form },
+        blocks: isWidget ? [] : blocks.slice(),
+        galleryItems: isWidget ? [] : galleryItems.slice(),
+        currentId,
+        previousSlug: editingSlugRef.current || '',
+        willSyncGallery,
+        pendingMediaCount,
+        pendingGalleryCount,
+      },
+    };
+
+    setPublishQueue((q) => [...q, job]);
+    showAdminToast(`已加入发布队列：${job.title}`);
+
+    // 清空编辑器，准备下一篇。
+    // 不撤销 blob 预览 URL：后台任务仍持有这些 File/预览引用，撤销会影响兜底读取。
+    setGalleryItems([]);
+    setGalleryDirty(false);
+    setEditorBlocks([]);
+    editingSlugRef.current = null;
+    setCurrentId(null);
+    setForm({ title: '', slug: '', excerpt: '', content: '', category: '', tags: '', cover: '', status: 'Published', type: 'Post', date: '' });
+    setView('list');
   };
 
   const updateSiteTitle = async () => {
@@ -2777,6 +2927,7 @@ const [mounted, setMounted] = useState(false);
         onClose={closeThemeDoneModal}
       />
       <AdminToast message={adminToast.message} visible={adminToast.visible} closing={adminToast.closing} />
+      <PublishQueuePanel jobs={publishQueue} onRetry={retryJob} onDismiss={dismissJob} />
       <div style={{ maxWidth: 900, margin: '0 auto', opacity: adminLocked ? 0.45 : 1, pointerEvents: adminLocked ? 'none' : 'auto', transition: 'opacity 0.25s ease' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
@@ -3275,19 +3426,7 @@ const [mounted, setMounted] = useState(false);
             </div>
 
             <button onClick={attemptSave} disabled={loading} title={isFormValid ? '' : (getMissingFieldMsg() || '')} style={{width:'100%', padding:'20px', background:isFormValid && !loading?'#fff':'#222', color:isFormValid && !loading?'#000':'#666', border:'none', borderRadius:'12px', fontWeight:'bold', fontSize:'16px', marginTop:'40px', cursor: loading ? 'wait' : 'pointer', transition:'0.3s'}}>
-              {loading && savePhase === 'media'
-                ? saveProgress
-                  ? `上传正文图片 ${saveProgress.done}/${saveProgress.total}…`
-                  : '准备上传正文图片…'
-                : loading && savePhase === 'post'
-                ? '保存文章中…'
-                : loading && savePhase === 'gallery'
-                  ? saveProgress?.total
-                    ? `上传图库 ${saveProgress.done}/${saveProgress.total}…`
-                    : '同步图库…'
-                  : currentId
-                    ? '保存修改'
-                    : '确认发布'}
+              {currentId ? '保存修改' : '确认发布'}
             </button>
           </div>
         )}
