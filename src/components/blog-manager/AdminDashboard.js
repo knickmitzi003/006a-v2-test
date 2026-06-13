@@ -1001,7 +1001,7 @@ const FullScreenLoader = ({ phase, progress }) => {
 
 /** 发布队列：每篇任务的阶段文案 */
 function pubqStateText(job) {
-  if (job.status === 'queued') return '排队中';
+  if (job.status === 'queued') return '队列中';
   if (job.status === 'success') return '已完成';
   if (job.status === 'error') return '发布失败';
   // running
@@ -1016,7 +1016,7 @@ function pubqStateText(job) {
 }
 
 /** 发布队列面板：固定在右上角，后台逐条处理，不阻塞编辑 */
-const PublishQueuePanel = ({ jobs, onRetry, onDismiss }) => {
+const PublishQueuePanel = ({ jobs, onRetry, onRemove }) => {
   if (!jobs || jobs.length === 0) return null;
   const active = jobs.filter((j) => j.status === 'queued' || j.status === 'running').length;
 
@@ -1049,19 +1049,26 @@ const PublishQueuePanel = ({ jobs, onRetry, onDismiss }) => {
                 {job.status === 'error' && (
                   <button className="pubq-retry" onClick={() => onRetry(job.id)}>重试</button>
                 )}
-                {(job.status === 'success' || job.status === 'error') && (
-                  <button className="pubq-x" title="移除" onClick={() => onDismiss(job.id)}>×</button>
-                )}
+                <button
+                  className="pubq-x"
+                  title={job.status === 'queued' || job.status === 'running' ? '取消发布' : '移除'}
+                  onClick={() => onRemove(job)}
+                >
+                  ×
+                </button>
               </div>
-              {(job.status === 'running' || job.status === 'success') && (
+              {job.status === 'running' && (
                 <div className="pubq-bar-track">
-                  {job.status === 'success' ? (
-                    <div className="pubq-bar" style={{ width: '100%' }} />
-                  ) : determinate ? (
+                  {determinate ? (
                     <div className="pubq-bar" style={{ width: `${pct}%` }} />
                   ) : (
                     <div className="pubq-bar-indet" />
                   )}
+                </div>
+              )}
+              {job.status === 'success' && (
+                <div className="pubq-bar-track">
+                  <div className="pubq-bar" style={{ width: '100%' }} />
                 </div>
               )}
               {job.status === 'error' && job.error && (
@@ -1976,6 +1983,7 @@ const [mounted, setMounted] = useState(false);
   const [saveProgress, setSaveProgress] = useState(null); // { done, total }
   const [publishQueue, setPublishQueue] = useState([]); // 后台发布队列
   const queueRunningRef = useRef(false);
+  const cancelledJobsRef = useRef(new Set()); // 已请求取消的任务 id
   const [galleryStorageStats, setGalleryStorageStats] = useState(null);
   const [galleryStorageLoading, setGalleryStorageLoading] = useState(false);
   const [galleryStorageError, setGalleryStorageError] = useState('');
@@ -2108,8 +2116,8 @@ const [mounted, setMounted] = useState(false);
   }
 
   // 🟢 4. 数据拉取函数 (提前定义)
-  async function fetchPosts() {
-    setLoading(true); 
+  async function fetchPosts({ silent = false } = {}) {
+    if (!silent) setLoading(true);
     try { 
        const r = await fetch('/api/admin/posts');
        if (!r.ok) throw new Error(`API Error: ${r.status}`);
@@ -2126,7 +2134,7 @@ const [mounted, setMounted] = useState(false);
            if (dConf.success && dConf.siteInfo) setSiteTitle(dConf.siteInfo.title);
        }
     } catch(e) { console.warn(e); } 
-    finally { setLoading(false); } 
+    finally { if (!silent) setLoading(false); } 
   }
 
   // 🟢 5. 处理函数
@@ -2525,6 +2533,7 @@ const [mounted, setMounted] = useState(false);
   }, []);
 
   const retryJob = useCallback((id) => {
+    cancelledJobsRef.current.delete(id);
     setPublishQueue((q) =>
       q.map((job) =>
         job.id === id
@@ -2534,9 +2543,24 @@ const [mounted, setMounted] = useState(false);
     );
   }, []);
 
+  // 取消/移除某条任务：排队中或进行中则标记取消（进行中为协作式取消，到下个阶段停止）
+  const removeJob = useCallback((job) => {
+    if (job.status === 'queued' || job.status === 'running') {
+      cancelledJobsRef.current.add(job.id);
+    }
+    setPublishQueue((q) => q.filter((j) => j.id !== job.id));
+  }, []);
+
   // 实际执行一条发布任务：完全基于任务快照 payload，不依赖当前编辑器状态
   const runPublishJob = useCallback(async (job) => {
     const { payload } = job;
+    const isCancelled = () => cancelledJobsRef.current.has(job.id);
+    const bailIfCancelled = () => {
+      if (!isCancelled()) return false;
+      cancelledJobsRef.current.delete(job.id);
+      return true;
+    };
+
     updateJob(job.id, { status: 'running', phase: '', progress: null, error: '' });
 
     try {
@@ -2556,12 +2580,14 @@ const [mounted, setMounted] = useState(false);
           }),
         });
         const d = await res.json();
+        if (bailIfCancelled()) return;
         if (!d.success) throw new Error(d.error || '保存失败');
         updateJob(job.id, { status: 'success', phase: '', progress: null });
-        fetchPosts();
+        fetchPosts({ silent: true });
         triggerShellBlogRefresh().then((rev) =>
           showRevalidateFeedback(rev, showAdminToast)
         );
+        setTimeout(() => dismissJob(job.id), 6000);
         return;
       }
 
@@ -2578,6 +2604,7 @@ const [mounted, setMounted] = useState(false);
             updateJob(job.id, { progress: { done, total } }),
         });
       }
+      if (bailIfCancelled()) return;
 
       // 2) 写入 Notion 文章
       updateJob(job.id, { phase: 'post', progress: null });
@@ -2602,16 +2629,18 @@ const [mounted, setMounted] = useState(false);
         }),
       });
       const d = await res.json();
+      if (bailIfCancelled()) return;
       if (!d.success) throw new Error(d.error || '保存失败');
 
       const newId = d.id || payload.currentId;
 
-      // Notion 写入完成后立刻刷 shell（与手动刷新相同），再传图库
+      // Notion 写入完成后立刻在后台静默刷新 shell（不弹全屏遮罩）
       const shellRev = await triggerShellBlogRefresh({ contentChange: true });
       showRevalidateFeedback(shellRev, showAdminToast);
 
       // 3) 上传图库
       if (payload.willSyncGallery) {
+        if (bailIfCancelled()) return;
         updateJob(job.id, {
           phase: 'gallery',
           progress:
@@ -2628,9 +2657,11 @@ const [mounted, setMounted] = useState(false);
             updateJob(job.id, { progress: { done, total } }),
         });
       }
+      if (bailIfCancelled()) return;
 
       updateJob(job.id, { status: 'success', phase: '', progress: null });
-      fetchPosts();
+      // 后台静默刷新列表，完成的文章无感知出现在内容列表中
+      fetchPosts({ silent: true });
       loadGalleryStorage();
 
       void triggerContentRevalidation({
@@ -2644,6 +2675,7 @@ const [mounted, setMounted] = useState(false);
       // 成功项稍后自动移除，保持队列整洁
       setTimeout(() => dismissJob(job.id), 6000);
     } catch (e) {
+      if (bailIfCancelled()) return;
       updateJob(job.id, {
         status: 'error',
         phase: '',
@@ -2927,7 +2959,7 @@ const [mounted, setMounted] = useState(false);
         onClose={closeThemeDoneModal}
       />
       <AdminToast message={adminToast.message} visible={adminToast.visible} closing={adminToast.closing} />
-      <PublishQueuePanel jobs={publishQueue} onRetry={retryJob} onDismiss={dismissJob} />
+      <PublishQueuePanel jobs={publishQueue} onRetry={retryJob} onRemove={removeJob} />
       <div style={{ maxWidth: 900, margin: '0 auto', opacity: adminLocked ? 0.45 : 1, pointerEvents: adminLocked ? 'none' : 'auto', transition: 'opacity 0.25s ease' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
