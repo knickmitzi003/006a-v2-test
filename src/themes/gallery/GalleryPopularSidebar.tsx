@@ -34,7 +34,7 @@ export function GalleryPopularSidebar({
   const [posts, setPosts] = useState(() =>
     withoutGalleryAnnouncement(initialPosts)
   )
-  const { isLoading, isStalled, startNav } = useGalleryNavLoading()
+  const { isLoading, isStalled, isReloading, startNav } = useGalleryNavLoading()
 
   useEffect(() => {
     setPosts(withoutGalleryAnnouncement(initialPosts))
@@ -89,7 +89,7 @@ export function GalleryPopularSidebar({
                       P
                     </div>
                   )}
-                  {isLoading(item.slug) ? <GalleryCardLoading stalled={isStalled(item.slug)} /> : null}
+                  {isLoading(item.slug) ? <GalleryCardLoading stalled={isStalled(item.slug)} reloading={isReloading(item.slug)} /> : null}
                 </div>
               </div>
               <div className="min-w-0 flex-1">

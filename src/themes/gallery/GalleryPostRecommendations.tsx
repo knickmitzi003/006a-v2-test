@@ -27,7 +27,7 @@ export function GalleryPostRecommendations({
   posts,
 }: GalleryPostRecommendationsProps) {
   const items = withoutGalleryAnnouncement(posts, posts.length)
-  const { isLoading, isStalled, startNav } = useGalleryNavLoading()
+  const { isLoading, isStalled, isReloading, startNav } = useGalleryNavLoading()
   if (!items.length) return null
 
   return (
@@ -56,7 +56,7 @@ export function GalleryPostRecommendations({
                   P
                 </div>
               )}
-              {isLoading(item.slug) ? <GalleryCardLoading stalled={isStalled(item.slug)} /> : null}
+              {isLoading(item.slug) ? <GalleryCardLoading stalled={isStalled(item.slug)} reloading={isReloading(item.slug)} /> : null}
             </div>
             <p
               className={`mt-2.5 line-clamp-2 group-hover:text-neutral-600 ${galleryCardTitleClass}`}

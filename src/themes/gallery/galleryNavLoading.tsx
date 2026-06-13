@@ -21,10 +21,14 @@ export function useGalleryNavLoading() {
   const router = useRouter()
   const [loadingKey, setLoadingKey] = useState<string | null>(null)
   const [stalledKey, setStalledKey] = useState<string | null>(null)
+  const [reloadingKey, setReloadingKey] = useState<string | null>(null)
   const loadingKeyRef = useRef<string | null>(null)
+  const reloadingKeyRef = useRef<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const reset = useCallback(() => {
+    // 已触发整页重载兜底时不要清空覆盖层，保留「重新加载中」直到页面真正卸载
+    if (reloadingKeyRef.current) return
     if (timerRef.current) {
       clearTimeout(timerRef.current)
       timerRef.current = null
@@ -60,8 +64,17 @@ export function useGalleryNavLoading() {
 
       // 同一张卡片已在加载中却被再次点击（或点了「重新打开」提示）：
       // 客户端导航大概率卡住，改用整页跳转兜底，必定能进入内页。
+      // 同时切到「重新加载中」状态，覆盖层保持显示直到整页加载完成。
       if (loadingKeyRef.current === key && href) {
         e.preventDefault()
+        reloadingKeyRef.current = key
+        if (timerRef.current) {
+          clearTimeout(timerRef.current)
+          timerRef.current = null
+        }
+        setReloadingKey(key)
+        setStalledKey(null)
+        setLoadingKey(key)
         window.location.href = href
         return
       }
@@ -77,10 +90,17 @@ export function useGalleryNavLoading() {
     []
   )
 
-  const isLoading = useCallback((key: string) => loadingKey === key, [loadingKey])
+  const isLoading = useCallback(
+    (key: string) => loadingKey === key || reloadingKey === key,
+    [loadingKey, reloadingKey]
+  )
   const isStalled = useCallback((key: string) => stalledKey === key, [stalledKey])
+  const isReloading = useCallback(
+    (key: string) => reloadingKey === key,
+    [reloadingKey]
+  )
 
-  return { isLoading, isStalled, startNav }
+  return { isLoading, isStalled, isReloading, startNav }
 }
 
 /**
@@ -88,13 +108,23 @@ export function useGalleryNavLoading() {
  * 卡住超过阈值时（stalled）追加可点击的「重新打开」提示，点击会冒泡到外层 Link 的
  * onClick(startNav) 触发整页跳转兜底。
  */
-export function GalleryCardLoading({ stalled = false }: { stalled?: boolean }) {
+export function GalleryCardLoading({
+  stalled = false,
+  reloading = false,
+}: {
+  stalled?: boolean
+  reloading?: boolean
+}) {
   return (
     <span
       className="gallery-card-loading pointer-events-none absolute inset-0 z-[3] flex flex-col items-center justify-center gap-2 bg-black/25"
     >
       <span className="gallery-card-spinner" aria-hidden="true" />
-      {stalled ? (
+      {reloading ? (
+        <span className="rounded bg-black/65 px-2 py-1 text-center text-[11px] font-medium leading-tight text-white">
+          重新加载中…
+        </span>
+      ) : stalled ? (
         <span className="pointer-events-auto cursor-pointer rounded bg-black/65 px-2 py-1 text-center text-[11px] font-medium leading-tight text-white">
           加载较慢，点此重新打开
         </span>

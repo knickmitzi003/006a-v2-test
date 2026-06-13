@@ -36,7 +36,7 @@ export const GalleryCard = ({ post }: { post: Post }) => {
   const downloadHref = galleryPostDownloadHref(post.slug)
   const tags = post.tags?.filter((t) => t.name) ?? []
   const categoryName = post.category?.name?.trim()
-  const { isLoading, isStalled, startNav } = useGalleryNavLoading()
+  const { isLoading, isStalled, isReloading, startNav } = useGalleryNavLoading()
   const loading = isLoading(post.slug)
 
   return (
@@ -58,7 +58,7 @@ export const GalleryCard = ({ post }: { post: Post }) => {
                 P
               </div>
             )}
-            {loading ? <GalleryCardLoading stalled={isStalled(post.slug)} /> : null}
+            {loading ? <GalleryCardLoading stalled={isStalled(post.slug)} reloading={isReloading(post.slug)} /> : null}
           </div>
         </Link>
 
