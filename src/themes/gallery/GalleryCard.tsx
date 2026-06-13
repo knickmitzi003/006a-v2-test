@@ -36,14 +36,14 @@ export const GalleryCard = ({ post }: { post: Post }) => {
   const downloadHref = galleryPostDownloadHref(post.slug)
   const tags = post.tags?.filter((t) => t.name) ?? []
   const categoryName = post.category?.name?.trim()
-  const { isLoading, startNav } = useGalleryNavLoading()
+  const { isLoading, isStalled, startNav } = useGalleryNavLoading()
   const loading = isLoading(post.slug)
 
   return (
     <article className="group flex w-full flex-col">
         <Link
           href={postHref}
-          onClick={startNav(post.slug)}
+          onClick={startNav(post.slug, postHref)}
           className="block overflow-hidden rounded-md"
         >
           <div className="relative aspect-[10/13.35] bg-neutral-100">
@@ -58,7 +58,7 @@ export const GalleryCard = ({ post }: { post: Post }) => {
                 P
               </div>
             )}
-            {loading ? <GalleryCardLoading /> : null}
+            {loading ? <GalleryCardLoading stalled={isStalled(post.slug)} /> : null}
           </div>
         </Link>
 
@@ -66,7 +66,7 @@ export const GalleryCard = ({ post }: { post: Post }) => {
           <div className="flex items-center justify-between gap-2">
             <Link
               href={postHref}
-              onClick={startNav(post.slug)}
+              onClick={startNav(post.slug, postHref)}
               className={`min-w-0 flex-1 truncate leading-tight hover:text-neutral-600 ${galleryCardTitleClass}`}
             >
               {post.title}

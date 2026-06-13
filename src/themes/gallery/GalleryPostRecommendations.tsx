@@ -27,7 +27,7 @@ export function GalleryPostRecommendations({
   posts,
 }: GalleryPostRecommendationsProps) {
   const items = withoutGalleryAnnouncement(posts, posts.length)
-  const { isLoading, startNav } = useGalleryNavLoading()
+  const { isLoading, isStalled, startNav } = useGalleryNavLoading()
   if (!items.length) return null
 
   return (
@@ -40,7 +40,7 @@ export function GalleryPostRecommendations({
           <Link
             key={item.slug}
             href={`/post/${item.slug}`}
-            onClick={startNav(item.slug)}
+            onClick={startNav(item.slug, `/post/${item.slug}`)}
             className="group block"
           >
             <div className="relative aspect-[5/2] overflow-hidden rounded-lg bg-neutral-100">
@@ -56,7 +56,7 @@ export function GalleryPostRecommendations({
                   P
                 </div>
               )}
-              {isLoading(item.slug) ? <GalleryCardLoading /> : null}
+              {isLoading(item.slug) ? <GalleryCardLoading stalled={isStalled(item.slug)} /> : null}
             </div>
             <p
               className={`mt-2.5 line-clamp-2 group-hover:text-neutral-600 ${galleryCardTitleClass}`}

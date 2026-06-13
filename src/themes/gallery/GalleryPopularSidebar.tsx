@@ -34,7 +34,7 @@ export function GalleryPopularSidebar({
   const [posts, setPosts] = useState(() =>
     withoutGalleryAnnouncement(initialPosts)
   )
-  const { isLoading, startNav } = useGalleryNavLoading()
+  const { isLoading, isStalled, startNav } = useGalleryNavLoading()
 
   useEffect(() => {
     setPosts(withoutGalleryAnnouncement(initialPosts))
@@ -72,7 +72,7 @@ export function GalleryPopularSidebar({
           <li key={item.slug}>
             <Link
               href={`/post/${item.slug}`}
-              onClick={startNav(item.slug)}
+              onClick={startNav(item.slug, `/post/${item.slug}`)}
               className="group flex items-start gap-3.5"
             >
               <div className={THUMB_CLASS}>
@@ -89,7 +89,7 @@ export function GalleryPopularSidebar({
                       P
                     </div>
                   )}
-                  {isLoading(item.slug) ? <GalleryCardLoading /> : null}
+                  {isLoading(item.slug) ? <GalleryCardLoading stalled={isStalled(item.slug)} /> : null}
                 </div>
               </div>
               <div className="min-w-0 flex-1">
