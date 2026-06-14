@@ -19,6 +19,7 @@ import { GalleryPostDownloadPage } from '@/src/themes/gallery/GalleryPostDownloa
 import { getPostStats } from '@/src/lib/gallery/postStats'
 import {
   GalleryAdBanner,
+  clearGalleryAdBannerCache,
   loadGalleryAdBanner,
 } from '@/src/lib/gallery/loadGalleryAdBanner'
 import { resolveActiveTheme } from '@/src/themes/getActiveTheme'
@@ -90,8 +91,11 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
       }
 
       const activeTheme = await resolveActiveTheme()
-      const galleryAdBanner =
-        activeTheme === 'gallery' ? await loadGalleryAdBanner() : null
+      let galleryAdBanner = null
+      if (activeTheme === 'gallery') {
+        clearGalleryAdBannerCache()
+        galleryAdBanner = await loadGalleryAdBanner()
+      }
 
       const safeData = JSON.parse(
         JSON.stringify({

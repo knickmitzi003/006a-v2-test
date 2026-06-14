@@ -14,11 +14,15 @@ export type GalleryAdBanner = {
 }
 
 const GALLERY_AD_SLUG = 'gallery-ad'
+/** 失败结果短缓存，避免 ISR 同实例内把 null 永久固化 */
+const NULL_CACHE_TTL_MS = 45_000
 
 let buildCache: GalleryAdBanner | null | undefined
+let buildCacheNullAt = 0
 
 export function clearGalleryAdBannerCache(): void {
   buildCache = undefined
+  buildCacheNullAt = 0
 }
 
 async function findGalleryAdWidget(): Promise<PageObjectResponse | null> {
@@ -36,17 +40,23 @@ async function findGalleryAdWidget(): Promise<PageObjectResponse | null> {
 }
 
 export async function loadGalleryAdBanner(): Promise<GalleryAdBanner | null> {
-  if (buildCache !== undefined) return buildCache
+  if (buildCache !== undefined) {
+    if (buildCache !== null) return buildCache
+    if (Date.now() - buildCacheNullAt < NULL_CACHE_TTL_MS) return null
+    buildCache = undefined
+  }
 
   const raw = await findGalleryAdWidget()
   if (!raw) {
     buildCache = null
+    buildCacheNullAt = Date.now()
     return null
   }
 
   const url = readRichTextPlain(raw.properties.excerpt) || ''
   if (!url.startsWith('http')) {
     buildCache = null
+    buildCacheNullAt = Date.now()
     return null
   }
 
@@ -69,6 +79,7 @@ export async function loadGalleryAdBanner(): Promise<GalleryAdBanner | null> {
 
   if (!imageSrc && !promoText) {
     buildCache = null
+    buildCacheNullAt = Date.now()
     return null
   }
 
@@ -77,5 +88,6 @@ export async function loadGalleryAdBanner(): Promise<GalleryAdBanner | null> {
     imageSrc,
     promoText,
   }
+  buildCacheNullAt = 0
   return buildCache
 }

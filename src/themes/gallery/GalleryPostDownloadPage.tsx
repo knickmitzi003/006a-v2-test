@@ -9,7 +9,7 @@ import { GalleryAdBanner } from './GalleryAdBanner'
 import { GalleryBreadcrumb } from './GalleryBreadcrumb'
 import { GalleryPostDownloadActions } from './GalleryPostDownloadActions'
 import { GalleryPostStats } from './GalleryPostStats'
-import { galleryEpicBarTitleClass, galleryProseClass } from './galleryFonts'
+import { galleryEpicBarTitleClass, galleryDownloadInstructionsClass } from './galleryFonts'
 
 type GalleryPostDownloadPageProps = {
   post: Post
@@ -115,11 +115,11 @@ export function GalleryPostDownloadPage({
 
                 <section className="pt-2">
                   {downloadInstructionBlocks.length > 0 ? (
-                    <div className={`${galleryProseClass} text-[15px] leading-relaxed`}>
+                    <div className={galleryDownloadInstructionsClass}>
                       <BlockRender blocks={downloadInstructionBlocks} variant="gallery" />
                     </div>
                   ) : (
-                    <p className="font-gallery text-sm leading-relaxed text-neutral-500">
+                    <p className="font-gallery text-[13px] leading-relaxed text-neutral-500/75">
                       暂无下载说明。请在后台「自定义页面」中编辑 slug 为{' '}
                       <code className="rounded bg-neutral-100 px-1 py-0.5 text-[13px] text-neutral-700">
                         download

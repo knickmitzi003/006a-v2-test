@@ -22,6 +22,7 @@ import {
 } from '@/src/lib/gallery/postStats'
 import {
   GalleryAdBanner,
+  clearGalleryAdBannerCache,
   loadGalleryAdBanner,
 } from '@/src/lib/gallery/loadGalleryAdBanner'
 import { resolveActiveTheme } from '@/src/themes/getActiveTheme'
@@ -111,8 +112,11 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
       const blocks = await getAllBlocks(postForPage.id)
       const formattedBlocks = await formatBlocks(blocks)
 
-      const galleryAdBanner =
-        activeTheme === 'gallery' ? await loadGalleryAdBanner() : null
+      let galleryAdBanner = null
+      if (activeTheme === 'gallery') {
+        clearGalleryAdBannerCache()
+        galleryAdBanner = await loadGalleryAdBanner()
+      }
 
       // 🛡️ JSON 暴力清洗：杜绝 undefined 导致的 500 报错
       const safeData = JSON.parse(JSON.stringify({

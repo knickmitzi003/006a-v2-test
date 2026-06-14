@@ -34,6 +34,10 @@ export const galleryPostTitleClass =
 export const galleryEpicBarTitleClass =
   'font-gallery text-[15px] font-normal leading-snug tracking-[0.01em] text-neutral-900 antialiased'
 
+/** 下载页底部说明（小号、略透明，区别于正文） */
+export const galleryDownloadInstructionsClass =
+  'prose-gallery font-gallery text-[13px] font-normal leading-[1.65] tracking-[0.01em] text-neutral-500/75 antialiased [&_p]:text-[13px] [&_p]:text-neutral-500/80 [&_li]:text-[13px] [&_li]:text-neutral-500/80'
+
 /** 文章页标签链接 */
 export const galleryPostTagLinkClass = `${galleryInlineLinkClass} text-[12px]`
 

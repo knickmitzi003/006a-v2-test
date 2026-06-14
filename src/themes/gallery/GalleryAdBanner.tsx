@@ -1,3 +1,6 @@
+'use client'
+
+import { useState } from 'react'
 import { GalleryAdBanner as GalleryAdBannerData } from '@/src/lib/gallery/loadGalleryAdBanner'
 
 type GalleryAdBannerProps = {
@@ -15,6 +18,8 @@ export function GalleryAdBanner({
 }: GalleryAdBannerProps) {
   const { url, imageSrc, promoText } = banner
   const hasImage = Boolean(imageSrc?.startsWith('http'))
+  const [imgFailed, setImgFailed] = useState(false)
+  const showImage = hasImage && !imgFailed
 
   const widthClass =
     layout === 'full' ? 'w-full' : 'mx-auto w-full max-w-[min(640px,84%)]'
@@ -28,12 +33,15 @@ export function GalleryAdBanner({
           rel="noopener noreferrer sponsored"
           className="group relative flex h-16 w-full items-center overflow-hidden rounded-lg shadow-[0_1px_6px_rgba(0,0,0,0.1)] ring-1 ring-black/5 transition-shadow duration-200 hover:shadow-[0_2px_10px_rgba(0,0,0,0.14)] sm:h-[72px]"
         >
-          {hasImage ? (
+          {showImage ? (
             <img
               src={imageSrc!}
               alt=""
               className="absolute inset-0 h-full w-full object-cover"
-              loading="lazy"
+              loading="eager"
+              decoding="async"
+              referrerPolicy="no-referrer"
+              onError={() => setImgFailed(true)}
             />
           ) : (
             <div
