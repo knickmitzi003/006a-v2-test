@@ -4205,7 +4205,7 @@ const [mounted, setMounted] = useState(false);
                      value={smartParseText}
                      onChange={(e) => setSmartParseText(e.target.value)}
                      onPaste={handleSmartParsePaste}
-                     placeholder="粘贴即识别，例如：[XIAOYUKIKO] [82P - 22MB] 药师少女的独语 - 猫猫"
+                     placeholder="粘贴即识别，请注意手动调整"
                      style={{ minHeight: '72px', fontSize: '13px', lineHeight: 1.5 }}
                    />
                    {smartParsePreview && (

@@ -62,7 +62,7 @@ export const GalleryCard = ({ post }: { post: Post }) => {
             {loading ? <GalleryCardLoading stalled={isStalled(post.slug)} reloading={isReloading(post.slug)} /> : null}
             {downloadCount ? (
               <span
-                className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-white"
+                className="absolute bottom-2 right-2 text-[11px] font-medium leading-tight text-white"
                 aria-label={`包含 ${downloadCount} 个媒体`}
               >
                 {downloadCount}
