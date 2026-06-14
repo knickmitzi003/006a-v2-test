@@ -36,6 +36,7 @@ const sortModeKeyframes = `
   animation: gallery-drop-pulse 1.2s ease-in-out infinite;
   transform: scale(1.01);
 }
+@keyframes gallery-mgr-spin { to { transform: rotate(360deg); } }
 `
 
 /**
@@ -50,6 +51,7 @@ export function GalleryManager({
   onGalleryMutated,
 }) {
   const [loading, setLoading] = useState(false)
+  const [processing, setProcessing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveDone, setSaveDone] = useState(false)
   const [error, setError] = useState('')
@@ -182,19 +184,24 @@ export function GalleryManager({
       alert('缺少文章 slug，无法添加图库')
       return
     }
-    const addBytes = files.reduce((s, f) => s + (f.size || 0), 0)
-    const pendingBytes = sumPendingGalleryBytes(items) + addBytes
-    setError('')
+    setProcessing(true)
     try {
-      await checkGalleryStorageBeforeAdd(pendingBytes)
-    } catch (e) {
-      setError(e.message)
-      alert(e.message)
-      return
+      const addBytes = files.reduce((s, f) => s + (f.size || 0), 0)
+      const pendingBytes = sumPendingGalleryBytes(items) + addBytes
+      setError('')
+      try {
+        await checkGalleryStorageBeforeAdd(pendingBytes)
+      } catch (e) {
+        setError(e.message)
+        alert(e.message)
+        return
+      }
+      const pending = files.map(createPendingGalleryItem)
+      onItemsChange((prev) => [...(prev || []), ...pending])
+      onGalleryMutated?.()
+    } finally {
+      setProcessing(false)
     }
-    const pending = files.map(createPendingGalleryItem)
-    onItemsChange((prev) => [...(prev || []), ...pending])
-    onGalleryMutated?.()
   }
 
   const removeAt = (index) => {
@@ -271,6 +278,7 @@ export function GalleryManager({
         <label
           className={`img-drop${fileDragOver ? ' img-drop-over' : ''}`}
           style={{
+            position: 'relative',
             minHeight: '100px',
             marginBottom: '16px',
             transition: 'border-color 0.15s ease, background 0.15s ease, transform 0.15s ease',
@@ -333,6 +341,35 @@ export function GalleryManager({
               {fileDragOver ? '支持多张图片同时放入' : '支持多张同时导入'}
             </div>
           </div>
+          {processing ? (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                borderRadius: '10px',
+                background: 'rgba(18, 22, 14, 0.82)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                zIndex: 5,
+              }}
+            >
+              <span
+                style={{
+                  width: '30px',
+                  height: '30px',
+                  border: '3px solid rgba(173, 255, 47, 0.25)',
+                  borderTopColor: 'greenyellow',
+                  borderRadius: '50%',
+                  display: 'inline-block',
+                  animation: 'gallery-mgr-spin 0.8s linear infinite',
+                }}
+              />
+              <span style={{ fontSize: '13px', color: 'greenyellow', fontWeight: 'bold' }}>正在导入图片…</span>
+            </div>
+          ) : null}
         </label>
       ) : (
         <div
