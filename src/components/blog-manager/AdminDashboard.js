@@ -355,7 +355,7 @@ const GlobalStyle = () => (
     .nav-item { position: relative; z-index: 2; padding: 8px 16px; cursor: pointer; color: #888; transition: color 0.3s; display: flex; align-items: center; justify-content: center; width: 40px; }
     .nav-item.active { color: #000; font-weight: bold; }
     .gallery-only-tag { display: inline; color: #1a1500; font-weight: 600; background: linear-gradient(180deg, #ffe566 0%, #ffd400 100%); padding: 1px 7px; border-radius: 4px; font-size: 10px; letter-spacing: 0.3px; box-shadow: 0 0 0 1px rgba(255, 200, 0, 0.35); vertical-align: baseline; }
-    .block-card-wrap { display: grid; grid-template-columns: 1fr 40px; column-gap: 4px; margin-bottom: 12px; align-items: stretch; }
+    .block-card-wrap { display: grid; grid-template-columns: 1fr 40px; column-gap: 4px; margin-bottom: 0; align-items: stretch; }
     .block-card { background: #2a2a2e; border: 1px solid #333; border-radius: 10px; padding: 15px 15px 15px 55px; margin-bottom: 0; position: relative; transition: border 0.2s; min-width: 0; }
     .block-card-wrap:hover .block-card { border-color: greenyellow; }
     .block-card.just-moved { animation: moveHighlight 0.6s ease-out; }
@@ -367,8 +367,8 @@ const GlobalStyle = () => (
     .block-label { font-size: 12px; color: greenyellow; margin-bottom: 8px; fontWeight: bold; text-transform: uppercase; letter-spacing: 1px; }
     .block-del { width: 40px; background: #ff4d4f; border-radius: 10px; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; cursor: pointer; color: white; align-self: stretch; }
     .block-card-wrap:hover .block-del { opacity: 1; pointer-events: auto; }
-    .block-add-btn { position: absolute; right: 14px; bottom: -14px; height: 28px; padding: 0 14px; border-radius: 14px; background: greenyellow; color: #000; display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: bold; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.45); transition: transform 0.15s, background 0.15s; z-index: 6; }
-    .block-add-btn:hover { transform: translateY(-1px); background: #c4f74a; }
+    .block-add-btn { position: absolute; left: 50%; bottom: -38px; transform: translateX(-50%); height: 36px; padding: 0 26px; border-radius: 10px; background: greenyellow; color: #000; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: bold; line-height: 1; cursor: pointer; box-shadow: 0 3px 12px rgba(0,0,0,0.4); transition: transform 0.15s, background 0.15s, box-shadow 0.15s; z-index: 6; }
+    .block-add-btn:hover { transform: translateX(-50%) translateY(-2px); background: #c4f74a; box-shadow: 0 5px 16px rgba(0,0,0,0.45); }
     .block-add-btn.open { background: #c4f74a; }
     .block-type-menu { position: absolute; z-index: 30; background: #1f1f24; border: 1px solid #3a3a42; border-radius: 10px; padding: 6px; box-shadow: 0 10px 30px rgba(0,0,0,0.55); display: flex; flex-direction: column; gap: 2px; min-width: 150px; }
     .block-type-menu .bt-item { padding: 8px 12px; border-radius: 6px; font-size: 13px; color: #ddd; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
@@ -1885,7 +1885,7 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
           </div>
         )
       ) : (
-      <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+      <div style={{display:'flex', flexDirection:'column', gap:'58px'}}>
         {blocks.map((b, index) => (
           <div key={b.id} className="block-card-wrap">
           <div id={`block-${b.id}`} className={`block-card ${movingId === b.id ? 'just-moved' : ''}`}>
@@ -2006,7 +2006,7 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
               title="在此块下方添加新块"
               onClick={(e) => { e.stopPropagation(); setAddMenuFor(addMenuFor === b.id ? null : b.id); }}
             ><span style={{ fontSize: '16px', lineHeight: 1 }}>＋</span> 添加块</div>
-            {addMenuFor === b.id && renderBlockTypeMenu((type) => addBlockAfter(index, type), { right: '-8px', bottom: '28px' })}
+            {addMenuFor === b.id && renderBlockTypeMenu((type) => addBlockAfter(index, type), { left: '50%', transform: 'translateX(-50%)', top: 'calc(100% + 44px)' })}
             </div>
             <div className="block-del" onClick={()=>removeBlock(b.id)} title="删除此块"><Icons.Trash /></div>
           </div>
