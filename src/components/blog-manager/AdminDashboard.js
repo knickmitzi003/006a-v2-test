@@ -456,8 +456,13 @@ const GlobalStyle = () => (
     .block-type-menu-floating { position: fixed; z-index: 10051; max-height: min(calc(100vh - 24px), 420px); overflow-y: auto; }
     .block-type-menu .bt-item { padding: 12px 18px; border-radius: 8px; font-size: 15px; color: #ddd; cursor: pointer; white-space: nowrap; transition: background 0.15s; line-height: 1.3; }
     .block-type-menu .bt-item:hover { background: #2f7cf6; color: #fff; }
-    .block-empty-add { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 26px; border: 2px dashed #555; border-radius: 12px; background: transparent; color: #ccc; font-size: 15px; font-weight: bold; cursor: pointer; transition: border-color 0.2s, color 0.2s; }
+    .block-empty-add { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 26px; border: 2px dashed #555; border-radius: 12px; background: transparent; color: #ccc; font-size: 15px; font-weight: bold; cursor: pointer; transition: border-color 0.2s, color 0.2s, background 0.2s, box-shadow 0.2s; }
     .block-empty-add:hover { border-color: greenyellow; color: greenyellow; }
+    .block-empty-add.is-file-drop-target { border-color: greenyellow; color: greenyellow; background: rgba(173, 255, 47, 0.1); box-shadow: 0 0 0 2px rgba(173, 255, 47, 0.45), 0 0 28px rgba(173, 255, 47, 0.35), inset 0 0 48px rgba(173, 255, 47, 0.08); }
+    .block-cover-hint { margin-bottom: 16px; font-size: 12px; color: #999; background: #202024; border-radius: 8px; padding: 12px 14px; line-height: 1.7; border: 1px solid #333; }
+    .block-card-wrap.is-file-drop-before .block-card { border-color: greenyellow; box-shadow: inset 0 4px 0 0 greenyellow, 0 0 18px rgba(173, 255, 47, 0.4); }
+    .block-card-wrap.is-file-drop-after .block-card { border-color: greenyellow; box-shadow: inset 0 -4px 0 0 greenyellow, 0 0 18px rgba(173, 255, 47, 0.4); }
+    .block-minimap.is-file-drop-empty { border-color: greenyellow; box-shadow: 0 0 0 2px rgba(173, 255, 47, 0.35), inset 0 0 40px rgba(173, 255, 47, 0.06); }
     .block-view-toolbar { display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
     .block-view-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
     .block-view-toggle .view-mode-btn { border: none; min-width: 0; height: 2.1em; padding: 0 0.85em; border-radius: 999px; display: inline-flex; justify-content: center; align-items: center; gap: 5px; background: #1C1A1C; cursor: pointer; transition: all 450ms ease-in-out; font-family: inherit; }
@@ -1657,12 +1662,27 @@ const BLOCK_TYPE_OPTIONS = [
 const BLOCK_TYPE_MENU_EST_HEIGHT = 400;
 const BLOCK_TYPE_MENU_MIN_WIDTH = 210;
 
+const BlockCoverHint = () => (
+  <div className="block-cover-hint">
+    🖼️ <b style={{ color: 'greenyellow' }}>封面说明</b>：系统会将正文中的第一个图片块设为文章封面，请把用作封面的图片块放在最前。
+  </div>
+);
+
+const isFileDragEvent = (e) => {
+  const dt = e.dataTransfer;
+  if (!dt?.types) return false;
+  return Array.from(dt.types).includes('Files');
+};
+
 const BlockBuilder = ({ blocks, setBlocks }) => {
   const [movingId, setMovingId] = useState(null);
   const [blockViewMode, setBlockViewMode] = useState('expanded');
   const [dragIndex, setDragIndex] = useState(null);
   const [dropIndex, setDropIndex] = useState(null);
   const [dropPosition, setDropPosition] = useState(null);
+  const [fileDropIndex, setFileDropIndex] = useState(null);
+  const [fileDropPosition, setFileDropPosition] = useState(null);
+  const [fileDropEmpty, setFileDropEmpty] = useState(false);
   const minimapDragMovedRef = useRef(false);
   const coverImageBlockId = findCoverImageBlock(blocks)?.id ?? null;
   // 行内超链接弹窗：{ blockId, start, end, label, url }，为 null 时关闭
@@ -1869,6 +1889,97 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
     scrollToBlock(created[created.length - 1].id);
   };
 
+  const clearFileDrop = () => {
+    setFileDropIndex(null);
+    setFileDropPosition(null);
+    setFileDropEmpty(false);
+  };
+
+  const insertImageBlocksAt = (insertIndex, fileList) => {
+    const files = Array.from(fileList || []).filter(f => /^(image|video)\//i.test(f.type));
+    if (!files.length) return;
+    const created = files.map(createPendingImageBlock);
+    setBlocks(prev => {
+      const idx = Math.max(0, Math.min(insertIndex, prev.length));
+      const next = [...prev];
+      next.splice(idx, 0, ...created);
+      return next;
+    });
+    setBlockViewMode('expanded');
+    scrollToBlock(created[created.length - 1].id);
+  };
+
+  const handleFileDropAt = (e, insertIndex) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = extractImageFilesFromDataTransfer(e.dataTransfer);
+    if (!files.length) {
+      clearFileDrop();
+      return;
+    }
+    insertImageBlocksAt(insertIndex, files);
+    clearFileDrop();
+  };
+
+  const handleEmptyFileDragOver = (e) => {
+    if (!isFileDragEvent(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setFileDropEmpty(true);
+    setFileDropIndex(null);
+    setFileDropPosition(null);
+  };
+
+  const handleExpandedFileDragOver = (e, index) => {
+    if (!isFileDragEvent(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const position = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    setFileDropIndex(index);
+    setFileDropPosition(position);
+    setFileDropEmpty(false);
+  };
+
+  const handleExpandedFileDrop = (e, index) => {
+    const files = extractImageFilesFromDataTransfer(e.dataTransfer);
+    if (!files.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const position = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    const insertAt = position === 'after' ? index + 1 : index;
+    handleFileDropAt(e, insertAt);
+  };
+
+  const resolveExpandedFileInsertFromY = (containerEl, clientY) => {
+    const wraps = containerEl?.querySelectorAll?.('.block-card-wrap');
+    if (!wraps?.length) return { index: 0, position: 'before' };
+    for (let i = 0; i < wraps.length; i++) {
+      const rect = wraps[i].getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (clientY < mid) {
+        return { index: i, position: 'before' };
+      }
+    }
+    return { index: wraps.length - 1, position: 'after' };
+  };
+
+  const applyExpandedFileDropHighlight = (containerEl, clientY) => {
+    const { index, position } = resolveExpandedFileInsertFromY(containerEl, clientY);
+    setFileDropIndex(index);
+    setFileDropPosition(position);
+    setFileDropEmpty(false);
+  };
+
+  const isBlockDropBefore = (index) =>
+    (dropIndex === index && dropPosition === 'before') ||
+    (fileDropIndex === index && fileDropPosition === 'before');
+
+  const isBlockDropAfter = (index) =>
+    (dropIndex === index && dropPosition === 'after') ||
+    (fileDropIndex === index && fileDropPosition === 'after');
+
   const handleFilesForBlock = (blockId, fileList) => {
     const files = Array.from(fileList || []).filter(f => /^(image|video)\//i.test(f.type));
     if (!files.length) return;
@@ -1965,11 +2076,14 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
       appendAndUpload(imgs);
     };
     const prevent = (e) => { e.preventDefault(); };
+    const onDragEnd = () => clearFileDrop();
     document.addEventListener('paste', onPaste);
+    document.addEventListener('dragend', onDragEnd);
     window.addEventListener('dragover', prevent);
     window.addEventListener('drop', prevent);
     return () => {
       document.removeEventListener('paste', onPaste);
+      document.removeEventListener('dragend', onDragEnd);
       window.removeEventListener('dragover', prevent);
       window.removeEventListener('drop', prevent);
     };
@@ -2027,6 +2141,7 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
       e.preventDefault();
       return;
     }
+    clearFileDrop();
     minimapDragMovedRef.current = false;
     setDragIndex(index);
     setDropIndex(null);
@@ -2040,6 +2155,14 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
   const handleMinimapDragOver = (e, index) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isFileDragEvent(e) && dragIndex === null) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const position = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+      setFileDropIndex(index);
+      setFileDropPosition(position);
+      setFileDropEmpty(false);
+      return;
+    }
     if (dragIndex === null) return;
     minimapDragMovedRef.current = true;
     if (dragIndex === index) {
@@ -2056,6 +2179,18 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
   const handleMinimapContainerDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isFileDragEvent(e) && dragIndex === null) {
+      if (!blocks.length) {
+        setFileDropEmpty(true);
+        setFileDropIndex(null);
+        setFileDropPosition(null);
+        return;
+      }
+      setFileDropIndex(blocks.length - 1);
+      setFileDropPosition('after');
+      setFileDropEmpty(false);
+      return;
+    }
     if (dragIndex === null || !blocks.length) return;
     minimapDragMovedRef.current = true;
     setDropIndex(blocks.length - 1);
@@ -2065,6 +2200,14 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
   const handleMinimapDrop = (e, index) => {
     e.preventDefault();
     e.stopPropagation();
+    const fileList = extractImageFilesFromDataTransfer(e.dataTransfer);
+    if (fileList.length && dragIndex === null) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const position = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+      const insertAt = position === 'after' ? index + 1 : index;
+      handleFileDropAt(e, insertAt);
+      return;
+    }
     const from = dragIndex ?? parseInt(e.dataTransfer.getData('text/plain'), 10);
     if (Number.isNaN(from)) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -2079,6 +2222,15 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
   const handleMinimapContainerDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    const fileList = extractImageFilesFromDataTransfer(e.dataTransfer);
+    if (fileList.length && dragIndex === null) {
+      if (!blocks.length) {
+        handleFileDropAt(e, 0);
+      } else {
+        handleFileDropAt(e, blocks.length);
+      }
+      return;
+    }
     const from = dragIndex ?? parseInt(e.dataTransfer.getData('text/plain'), 10);
     if (Number.isNaN(from)) return;
     reorderBlocks(from, blocks.length);
@@ -2175,26 +2327,37 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
           />
         </div>
       </div>
+      <BlockCoverHint />
       {blockViewMode === 'compact' ? (
         blocks.length === 0 ? (
           <div style={{ position: 'relative' }}>
             <div
-              className="block-empty-add"
+              className={`block-empty-add${fileDropEmpty ? ' is-file-drop-target' : ''}`}
               onClick={(e) =>
                 toggleAddMenu('empty-compact', e, (type) =>
                   addBlockAfter(-1, type, { stayCompact: true })
                 )
               }
+              onDragOver={handleEmptyFileDragOver}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) clearFileDrop();
+              }}
+              onDrop={(e) => {
+                if (!isFileDragEvent(e)) return;
+                handleFileDropAt(e, 0);
+              }}
             >
               <span style={{ fontSize:'22px' }}>＋</span> 点击添加第一个内容块
             </div>
-            <div style={{ textAlign:'center', color:'#666', fontSize:'12px', marginTop:'10px' }}>首个图片块将被作为本篇封面</div>
           </div>
         ) : (
           <div
-            className="block-minimap"
+            className={`block-minimap${fileDropEmpty ? ' is-file-drop-empty' : ''}`}
             onDragOver={handleMinimapContainerDragOver}
             onDrop={handleMinimapContainerDrop}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget)) clearFileDrop();
+            }}
           >
             <div className="block-minimap-list">
               {blocks.map((b, index) => (
@@ -2204,8 +2367,8 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
                     index={index}
                     isCover={b.id === coverImageBlockId}
                     isDragging={dragIndex === index}
-                    isDropBefore={dropIndex === index && dropPosition === 'before'}
-                    isDropAfter={dropIndex === index && dropPosition === 'after'}
+                    isDropBefore={isBlockDropBefore(index)}
+                    isDropAfter={isBlockDropAfter(index)}
                     justMoved={movingId === b.id}
                     onDragStart={handleMinimapDragStart}
                     onDragOver={handleMinimapDragOver}
@@ -2221,9 +2384,33 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
           </div>
         )
       ) : (
-      <div className="block-builder-expanded">
+      <div
+        className="block-builder-expanded"
+        onDragOver={(e) => {
+          if (!isFileDragEvent(e) || !blocks.length) return;
+          e.preventDefault();
+          applyExpandedFileDropHighlight(e.currentTarget, e.clientY);
+        }}
+        onDrop={(e) => {
+          const files = extractImageFilesFromDataTransfer(e.dataTransfer);
+          if (!files.length || dragIndex !== null) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const { index, position } = resolveExpandedFileInsertFromY(e.currentTarget, e.clientY);
+          const insertAt = position === 'after' ? index + 1 : index;
+          handleFileDropAt(e, insertAt);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) clearFileDrop();
+        }}
+      >
         {blocks.map((b, index) => (
-          <div key={b.id} className="block-card-wrap">
+          <div
+            key={b.id}
+            className={`block-card-wrap${isBlockDropBefore(index) ? ' is-file-drop-before' : ''}${isBlockDropAfter(index) ? ' is-file-drop-after' : ''}`}
+            onDragOver={(e) => handleExpandedFileDragOver(e, index)}
+            onDrop={(e) => handleExpandedFileDrop(e, index)}
+          >
           <div id={`block-${b.id}`} className={`block-card ${movingId === b.id ? 'just-moved' : ''}`}>
             <div className="block-left-ctrl">
                <div className="move-btn" onClick={() => moveToTop(index)} title="置顶"><Icons.Top /></div>
@@ -2355,14 +2542,21 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
         {blocks.length === 0 && (
           <div style={{ position:'relative' }}>
             <div
-              className="block-empty-add"
+              className={`block-empty-add${fileDropEmpty ? ' is-file-drop-target' : ''}`}
               onClick={(e) =>
                 toggleAddMenu('empty-expanded', e, (type) => addBlockAfter(-1, type))
               }
+              onDragOver={handleEmptyFileDragOver}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) clearFileDrop();
+              }}
+              onDrop={(e) => {
+                if (!isFileDragEvent(e)) return;
+                handleFileDropAt(e, 0);
+              }}
             >
               <span style={{ fontSize:'22px' }}>＋</span> 点击添加第一个内容块
             </div>
-            <div style={{ textAlign:'center', color:'#666', fontSize:'12px', marginTop:'10px' }}>首个图片块将被作为本篇封面</div>
           </div>
         )}
       </div>
@@ -4337,11 +4531,6 @@ const [mounted, setMounted] = useState(false);
           /* 这里是之前的表单编辑代码... */
           <div style={{background: '#424242', padding: 30, borderRadius: 20}}>
             <StepAccordion step={1} title="基础信息" isOpen={expandedStep === 1} onToggle={()=>setExpandedStep(expandedStep===1?0:1)}>
-               {!editingSimplePage ? (
-                 <div style={{marginBottom:'16px', fontSize:'12px', color:'#999', background:'#202024', borderRadius:'8px', padding:'12px 14px', lineHeight:1.7, border:'1px solid #333'}}>
-                   🖼️ <b style={{color:'greenyellow'}}>封面说明</b>：系统会将正文中的第一个图片块设为文章封面，请把用作封面的图片块放在最前。
-                 </div>
-               ) : null}
                {!editingSimplePage ? (
                  <div style={{ marginBottom: '18px', padding: '14px', borderRadius: '10px', border: '1px solid #3a3a42', background: '#1a1a1e' }}>
                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
