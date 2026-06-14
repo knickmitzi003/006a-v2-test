@@ -411,7 +411,8 @@ const GlobalStyle = () => (
     .block-label { font-size: 12px; color: greenyellow; margin-bottom: 8px; fontWeight: bold; text-transform: uppercase; letter-spacing: 1px; }
     .block-del { width: 40px; background: #ff4d4f; border-radius: 10px; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; cursor: pointer; color: white; align-self: stretch; }
     .block-card-wrap:hover .block-del { opacity: 1; pointer-events: auto; }
-    .block-add-btn { position: absolute; right: 22px; bottom: -47px; height: 36px; padding: 0 24px; border-radius: 10px; background: greenyellow; color: #000; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: bold; line-height: 1; cursor: pointer; box-shadow: 0 3px 12px rgba(0,0,0,0.4); transition: transform 0.15s, background 0.15s, box-shadow 0.15s; z-index: 6; }
+    .block-add-btn-wrap { position: absolute; left: 50%; bottom: -52px; transform: translateX(-50%); z-index: 6; display: flex; flex-direction: column; align-items: center; }
+    .block-add-btn { position: relative; height: 36px; padding: 0 24px; border-radius: 10px; background: greenyellow; color: #000; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: bold; line-height: 1; cursor: pointer; box-shadow: 0 3px 12px rgba(0,0,0,0.4); transition: transform 0.15s, background 0.15s, box-shadow 0.15s; }
     .block-add-btn:hover { transform: translateY(-2px); background: #c4f74a; box-shadow: 0 5px 16px rgba(0,0,0,0.45); }
     .block-add-btn.open { background: #c4f74a; }
     .block-type-menu { position: absolute; z-index: 100; background: #1f1f24; border: 1px solid #3a3a42; border-radius: 12px; padding: 8px; box-shadow: 0 12px 36px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 4px; min-width: 210px; }
@@ -428,7 +429,12 @@ const GlobalStyle = () => (
     .block-view-toggle .view-mode-btn:hover .view-mode-text, .block-view-toggle .view-mode-btn.is-active .view-mode-text { color: white; }
     .block-view-toggle .view-mode-btn:hover .view-mode-sparkle, .block-view-toggle .view-mode-btn.is-active .view-mode-sparkle { fill: white; transform: scale(1.15); }
     .block-view-toggle .view-mode-btn:active { transform: translateY(0); }
-    .block-minimap { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px; background: #252528; border: 1px solid #333; border-radius: 12px; max-height: min(72vh, 680px); overflow-y: auto; }
+    .block-minimap { display: flex; flex-direction: column; align-items: center; padding: 14px; background: #252528; border: 1px solid #333; border-radius: 12px; max-height: min(72vh, 680px); overflow-y: auto; }
+    .block-minimap-list { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+    .block-minimap-add-wrap { position: relative; display: flex; justify-content: center; align-items: center; padding: 2px 0; flex-shrink: 0; width: 100%; }
+    .block-minimap-add-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px dashed #555; background: #1c1c1f; color: greenyellow; font-size: 20px; font-weight: 700; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: border-color 0.15s, background 0.15s, transform 0.15s, box-shadow 0.15s; box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
+    .block-minimap-add-btn:hover, .block-minimap-add-btn.open { border-color: greenyellow; background: rgba(173,255,47,0.14); box-shadow: 0 3px 12px rgba(173,255,47,0.2); transform: scale(1.05); }
+    .block-builder-expanded { display: flex; flex-direction: column; gap: 72px; padding-bottom: 28px; }
     .block-minimap-item { position: relative; display: flex; flex-direction: column; width: 140px; min-height: 118px; flex-shrink: 0; border: 1px solid #444; border-radius: 8px; background: #1c1c1f; overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s; user-select: none; cursor: grab; touch-action: none; }
     .block-minimap-item:active { cursor: grabbing; }
     .block-minimap-item:hover { border-color: #666; }
@@ -1583,14 +1589,40 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
   const [addMenuFor, setAddMenuFor] = useState(null);
 
   // 在指定下标之后插入新块；index 传 -1 表示插到最前
-  const addBlockAfter = (index, type) => {
+  const addBlockAfter = (index, type, options = {}) => {
     const newId = Date.now() + Math.random();
     const newBlock = { id: newId, type, content: '', pwd: '', url: '', images: [], bold: false, italic: false, color: 'default' };
     setBlocks([...blocks.slice(0, index + 1), newBlock, ...blocks.slice(index + 1)]);
-    setBlockViewMode('expanded');
     setAddMenuFor(null);
-    scrollToBlock(newId);
+    if (options.stayCompact || blockViewMode === 'compact') {
+      setMovingId(newId);
+      setTimeout(() => setMovingId(null), 600);
+    } else {
+      setBlockViewMode('expanded');
+      scrollToBlock(newId);
+    }
   };
+
+  const renderMinimapAddBtn = (menuKey, afterIndex) => (
+    <div key={menuKey} className="block-minimap-add-wrap">
+      <button
+        type="button"
+        className={`block-minimap-add-btn ${addMenuFor === menuKey ? 'open' : ''}`}
+        title="在此处添加块"
+        onClick={(e) => {
+          e.stopPropagation();
+          setAddMenuFor(addMenuFor === menuKey ? null : menuKey);
+        }}
+      >
+        ＋
+      </button>
+      {addMenuFor === menuKey &&
+        renderBlockTypeMenu(
+          (type) => addBlockAfter(afterIndex, type, { stayCompact: true }),
+          { left: '50%', transform: 'translateX(-50%)', top: 'calc(100% + 6px)' }
+        )}
+    </div>
+  );
 
   const renderBlockTypeMenu = (onPick, extraStyle) => (
     <div className="block-type-menu" style={extraStyle} onClick={(e) => e.stopPropagation()}>
@@ -1986,35 +2018,48 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
       </div>
       {blockViewMode === 'compact' ? (
         blocks.length === 0 ? (
-          <div style={{textAlign:'center', color:'#666', padding:'40px', border:'2px dashed #444', borderRadius:'12px'}}>👋 正文暂无内容，请点击上方按钮添加模块，首个图片块将被作为本篇封面</div>
+          <div style={{ position: 'relative' }}>
+            <div
+              className="block-empty-add"
+              onClick={(e) => { e.stopPropagation(); setAddMenuFor(addMenuFor === 'empty' ? null : 'empty'); }}
+            >
+              <span style={{ fontSize:'22px' }}>＋</span> 点击添加第一个内容块
+            </div>
+            {addMenuFor === 'empty' && renderBlockTypeMenu((type) => addBlockAfter(-1, type, { stayCompact: true }), { left:'50%', transform:'translateX(-50%)', top:'calc(100% + 6px)' })}
+            <div style={{ textAlign:'center', color:'#666', fontSize:'12px', marginTop:'10px' }}>首个图片块将被作为本篇封面</div>
+          </div>
         ) : (
           <div
             className="block-minimap"
             onDragOver={handleMinimapContainerDragOver}
             onDrop={handleMinimapContainerDrop}
           >
-            {blocks.map((b, index) => (
-              <BlockMinimapItem
-                key={b.id}
-                block={b}
-                index={index}
-                isCover={b.id === coverImageBlockId}
-                isDragging={dragIndex === index}
-                isDropBefore={dropIndex === index && dropPosition === 'before'}
-                isDropAfter={dropIndex === index && dropPosition === 'after'}
-                justMoved={movingId === b.id}
-                onDragStart={handleMinimapDragStart}
-                onDragOver={handleMinimapDragOver}
-                onDrop={handleMinimapDrop}
-                onDragEnd={handleMinimapDragEnd}
-                onClick={handleMinimapClick}
-                onRemove={removeBlock}
-              />
-            ))}
+            <div className="block-minimap-list">
+              {blocks.map((b, index) => (
+                <React.Fragment key={b.id}>
+                  <BlockMinimapItem
+                    block={b}
+                    index={index}
+                    isCover={b.id === coverImageBlockId}
+                    isDragging={dragIndex === index}
+                    isDropBefore={dropIndex === index && dropPosition === 'before'}
+                    isDropAfter={dropIndex === index && dropPosition === 'after'}
+                    justMoved={movingId === b.id}
+                    onDragStart={handleMinimapDragStart}
+                    onDragOver={handleMinimapDragOver}
+                    onDrop={handleMinimapDrop}
+                    onDragEnd={handleMinimapDragEnd}
+                    onClick={handleMinimapClick}
+                    onRemove={removeBlock}
+                  />
+                  {renderMinimapAddBtn(`compact-after-${b.id}`, index)}
+                </React.Fragment>
+              ))}
+            </div>
           </div>
         )
       ) : (
-      <div style={{display:'flex', flexDirection:'column', gap:'58px'}}>
+      <div className="block-builder-expanded">
         {blocks.map((b, index) => (
           <div key={b.id} className="block-card-wrap">
           <div id={`block-${b.id}`} className={`block-card ${movingId === b.id ? 'just-moved' : ''}`}>
@@ -2130,12 +2175,14 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
                  {b.error && <div className="img-err">⚠ {b.error}</div>}
                </label>
             )}
-            <div
-              className={`block-add-btn ${addMenuFor === b.id ? 'open' : ''}`}
-              title="在此块下方添加新块"
-              onClick={(e) => { e.stopPropagation(); setAddMenuFor(addMenuFor === b.id ? null : b.id); }}
-            ><span style={{ fontSize: '16px', lineHeight: 1 }}>＋</span> 添加块</div>
-            {addMenuFor === b.id && renderBlockTypeMenu((type) => addBlockAfter(index, type), { right: '22px', bottom: 'calc(-47px + 36px + 8px)' })}
+            <div className="block-add-btn-wrap">
+              <div
+                className={`block-add-btn ${addMenuFor === b.id ? 'open' : ''}`}
+                title="在此块下方添加新块"
+                onClick={(e) => { e.stopPropagation(); setAddMenuFor(addMenuFor === b.id ? null : b.id); }}
+              ><span style={{ fontSize: '16px', lineHeight: 1 }}>＋</span> 添加块</div>
+              {addMenuFor === b.id && renderBlockTypeMenu((type) => addBlockAfter(index, type), { left: '50%', transform: 'translateX(-50%)', top: 'calc(100% + 8px)' })}
+            </div>
             </div>
             <div className="block-del" onClick={()=>removeBlock(b.id)} title="删除此块"><Icons.Trash /></div>
           </div>
@@ -3953,7 +4000,7 @@ const [mounted, setMounted] = useState(false);
               <div className="fab-btn" onClick={() => scrollEditView('bottom')}><Icons.ArrowDown /></div>
             </div>
 
-            <button onClick={attemptSave} disabled={loading} title={isFormValid ? '' : (getMissingFieldMsg() || '')} style={{width:'100%', padding:'20px', background:isFormValid && !loading?'#fff':'#222', color:isFormValid && !loading?'#000':'#666', border:'none', borderRadius:'12px', fontWeight:'bold', fontSize:'16px', marginTop:'40px', cursor: loading ? 'wait' : 'pointer', transition:'0.3s'}}>
+            <button onClick={attemptSave} disabled={loading} title={isFormValid ? '' : (getMissingFieldMsg() || '')} style={{width:'100%', padding:'20px', background:isFormValid && !loading?'#fff':'#222', color:isFormValid && !loading?'#000':'#666', border:'none', borderRadius:'12px', fontWeight:'bold', fontSize:'16px', marginTop:'56px', cursor: loading ? 'wait' : 'pointer', transition:'0.3s'}}>
               {currentId ? '保存修改' : '确认发布'}
             </button>
           </div>
