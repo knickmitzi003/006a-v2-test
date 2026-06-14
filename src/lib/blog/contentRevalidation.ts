@@ -378,6 +378,27 @@ export function collectPageRevalidatePaths(
   return Array.from(paths)
 }
 
+/** 全站下载说明变更：壳层 + /download + 所有文章下载内页 */
+export async function collectDownloadInstructionsRevalidatePaths(): Promise<
+  string[]
+> {
+  const downloadSlug = CONFIG.DEFAULT_SPECIAL_PAGES.DOWNLOAD
+  const paths = new Set<string>(
+    collectPageRevalidatePaths(downloadSlug)
+  )
+
+  const { posts, pieces } = await getPostsAndPieces(ApiScope.Archive)
+  const formatted = await formatPosts(
+    [...posts, ...pieces],
+    FORMAT_POST_LIST_OPTIONS
+  )
+  for (const post of formatted) {
+    paths.add(`/post/${post.slug}/download`)
+  }
+
+  return Array.from(paths)
+}
+
 export async function revalidateMany(
   res: NextApiResponse,
   paths: string[],

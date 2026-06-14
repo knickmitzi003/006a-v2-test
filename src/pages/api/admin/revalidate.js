@@ -1,8 +1,10 @@
 import { slugify } from '@/src/lib/util'
+import CONFIG from '@/blog.config'
 import {
   clearContentBuildCaches,
   collectAllRevalidatePaths,
   collectDeleteRevalidatePaths,
+  collectDownloadInstructionsRevalidatePaths,
   collectGalleryAdRevalidatePaths,
   collectPageRevalidatePaths,
   collectPostRevalidatePaths,
@@ -76,6 +78,8 @@ export default async function handler(req, res) {
         paths = await collectGalleryAdRevalidatePaths()
       } else if (listScope === 'theme-posts') {
         paths = await collectThemePostRevalidatePaths()
+      } else if (listScope === 'download-instructions') {
+        paths = await collectDownloadInstructionsRevalidatePaths()
       }
       return res.status(200).json({
         success: true,
@@ -105,7 +109,11 @@ export default async function handler(req, res) {
         previousSlug,
       })
     } else if (scope === 'page' && slug) {
-      paths = collectPageRevalidatePaths(slug, { previousSlug })
+      if (slug === CONFIG.DEFAULT_SPECIAL_PAGES.DOWNLOAD) {
+        paths = await collectDownloadInstructionsRevalidatePaths()
+      } else {
+        paths = collectPageRevalidatePaths(slug, { previousSlug })
+      }
     } else if (scope === 'friends') {
       paths = ['/', '/friends']
     } else if (scope === 'widget') {

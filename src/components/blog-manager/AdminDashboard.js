@@ -2897,13 +2897,48 @@ const [mounted, setMounted] = useState(false);
       fetchPosts({ silent: true });
       loadGalleryStorage();
 
-      void triggerContentRevalidation({
-        scope: 'post',
-        slug: payload.form.slug,
-        category: payload.form.category || '',
-        tags: payload.form.tags || '',
-        previousSlug: payload.previousSlug || '',
-      }).catch((e) => console.warn('文章内页增量刷新失败', e));
+      const saveSlug = payload.form.slug || '';
+      const saveType = payload.form.type || 'Post';
+      const saveScope = resolveSaveRevalidateScope(saveType, saveSlug);
+      const previousSlug = payload.previousSlug || '';
+
+      if (saveScope === 'post') {
+        void triggerContentRevalidation({
+          scope: 'post',
+          slug: saveSlug,
+          category: payload.form.category || '',
+          tags: payload.form.tags || '',
+          previousSlug,
+        }).catch((e) => console.warn('文章内页增量刷新失败', e));
+      } else if (saveScope === 'page' && saveSlug === 'download') {
+        void runBatchedRevalidation({
+          listScope: 'download-instructions',
+          freshTheme: true,
+          contentChange: true,
+          progressLabels: {
+            listing: '正在统计文章下载页…',
+            running: '正在更新下载说明与文章下载页…',
+            doneOk: '下载说明已同步到全部文章下载页',
+            donePartial: '部分文章下载页需稍后自动更新',
+            hintPartial: '个页面未能更新，可重新保存下载说明或点右上角刷新',
+            hintOk: '全部文章下载页已更新',
+          },
+        }).catch((e) => console.warn('下载说明增量刷新失败', e));
+      } else if (saveScope === 'page') {
+        void triggerContentRevalidation({
+          scope: 'page',
+          slug: saveSlug,
+          previousSlug,
+        }).catch((e) => console.warn('自定义页面增量刷新失败', e));
+      } else if (saveScope === 'gallery-ad') {
+        void triggerContentRevalidation({ scope: 'gallery-ad' }).catch((e) =>
+          console.warn('Gallery 广告增量刷新失败', e)
+        );
+      } else if (saveScope === 'widget') {
+        void triggerContentRevalidation({ scope: 'widget' }).catch((e) =>
+          console.warn('组件页增量刷新失败', e)
+        );
+      }
 
       // 成功项稍后自动移除，保持队列整洁
       setTimeout(() => dismissJob(job.id), 6000);
