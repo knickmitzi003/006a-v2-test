@@ -1316,6 +1316,64 @@ const PublishConfirmModal = ({ open, closing, isUpdate, onConfirm, onCancel }) =
   );
 };
 
+/** 全量刷新确认弹窗 */
+const FullRedeployConfirmModal = ({ open, closing, busy, onConfirm, onCancel }) => {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (open && !closing) {
+      setVisible(false);
+      const id = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setVisible(true));
+      });
+      return () => cancelAnimationFrame(id);
+    }
+    if (!open || closing) setVisible(false);
+  }, [open, closing]);
+
+  if (!open && !closing) return null;
+
+  return (
+    <div
+      className={`cover-modal-backdrop ${visible && !closing ? 'is-visible' : ''} ${closing ? 'is-closing' : ''}`}
+      onClick={onCancel}
+      role="presentation"
+    >
+      <div
+        className="cover-modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="full-redeploy-modal-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="cover-modal-icon" aria-hidden>🔄</div>
+        <h3 id="full-redeploy-modal-title" className="cover-modal-title">确认全量更新</h3>
+        <p className="cover-modal-desc">
+          是否确定执行全量更新，24h仅支持执行1次
+        </p>
+        <div className="cover-modal-actions">
+          <button type="button" className="cover-modal-btn cover-modal-btn-secondary" onClick={onCancel} disabled={busy}>
+            取消
+          </button>
+          <button
+            type="button"
+            className="cover-modal-btn"
+            onClick={onConfirm}
+            disabled={busy}
+            style={{
+              background: busy ? '#5a4a6e' : '#9a6dd7',
+              color: '#fff',
+              boxShadow: busy ? 'none' : '0 4px 14px rgba(154,109,215,0.35)',
+            }}
+          >
+            {busy ? '执行中…' : '执行'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /** 主题切换完成提示（替代浏览器 alert） */
 const ThemeSwitchDoneModal = ({ open, closing, extraNote, onClose }) => {
   const [visible, setVisible] = useState(false);
@@ -2448,6 +2506,9 @@ const [mounted, setMounted] = useState(false);
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const [publishConfirmClosing, setPublishConfirmClosing] = useState(false);
   const publishConfirmTimerRef = useRef(null);
+  const [fullRedeployConfirmOpen, setFullRedeployConfirmOpen] = useState(false);
+  const [fullRedeployConfirmClosing, setFullRedeployConfirmClosing] = useState(false);
+  const fullRedeployConfirmTimerRef = useRef(null);
   const [themeDoneModalOpen, setThemeDoneModalOpen] = useState(false);
   const [themeDoneModalClosing, setThemeDoneModalClosing] = useState(false);
   const [themeDoneModalNote, setThemeDoneModalNote] = useState('');
@@ -2507,6 +2568,15 @@ const [mounted, setMounted] = useState(false);
     publishConfirmTimerRef.current = setTimeout(() => {
       setPublishConfirmOpen(false);
       setPublishConfirmClosing(false);
+    }, 240);
+  };
+
+  const closeFullRedeployConfirmModal = () => {
+    if (fullRedeployConfirmTimerRef.current) clearTimeout(fullRedeployConfirmTimerRef.current);
+    setFullRedeployConfirmClosing(true);
+    fullRedeployConfirmTimerRef.current = setTimeout(() => {
+      setFullRedeployConfirmOpen(false);
+      setFullRedeployConfirmClosing(false);
     }, 240);
   };
 
@@ -3463,12 +3533,7 @@ const [mounted, setMounted] = useState(false);
       .finally(() => { setBlogRefreshBusy(false); });
   };
 
-  const handleFullRedeploy = async () => {
-    if (isThemeLoading || fullRedeployBusy || fullRedeployCooldownSec > 0) return;
-    if (!fullRedeployConfigured) {
-      showAdminToast('全量刷新未配置，请联系管理');
-      return;
-    }
+  const executeFullRedeploy = async () => {
     setFullRedeployBusy(true);
     try {
       const res = await fetch('/api/admin/full-redeploy', { method: 'POST' });
@@ -3485,6 +3550,7 @@ const [mounted, setMounted] = useState(false);
           Date.now() + 24 * 60 * 60 * 1000;
         setFullRedeployCooldownSec(24 * 60 * 60);
       }
+      closeFullRedeployConfirmModal();
       showAdminToast(
         data.message ||
           '全量更新已触发，请等待3分钟后刷新BLOG，如存在问题请联系管理'
@@ -3494,6 +3560,22 @@ const [mounted, setMounted] = useState(false);
     } finally {
       setFullRedeployBusy(false);
     }
+  };
+
+  const proceedFullRedeployAfterConfirm = () => {
+    if (fullRedeployBusy) return;
+    executeFullRedeploy();
+  };
+
+  const openFullRedeployConfirm = () => {
+    if (isThemeLoading || fullRedeployBusy || fullRedeployCooldownSec > 0) return;
+    if (!fullRedeployConfigured) {
+      showAdminToast('全量刷新未配置，请联系管理');
+      return;
+    }
+    if (fullRedeployConfirmTimerRef.current) clearTimeout(fullRedeployConfirmTimerRef.current);
+    setFullRedeployConfirmClosing(false);
+    setFullRedeployConfirmOpen(true);
   };
 
   const deleteTagOption = (e, tagToDelete) => {
@@ -3803,6 +3885,13 @@ const [mounted, setMounted] = useState(false);
         extraNote={themeDoneModalNote}
         onClose={closeThemeDoneModal}
       />
+      <FullRedeployConfirmModal
+        open={fullRedeployConfirmOpen}
+        closing={fullRedeployConfirmClosing}
+        busy={fullRedeployBusy}
+        onConfirm={proceedFullRedeployAfterConfirm}
+        onCancel={closeFullRedeployConfirmModal}
+      />
       <AdminToast message={adminToast.message} visible={adminToast.visible} closing={adminToast.closing} />
       <PublishQueuePanel
         jobs={publishQueue}
@@ -3822,49 +3911,57 @@ const [mounted, setMounted] = useState(false);
            </div>
            
            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexShrink: 0 }}>
-             <button
-               type="button"
-               onClick={handleFullRedeploy}
-               disabled={
-                 isThemeLoading ||
-                 fullRedeployBusy ||
-                 fullRedeployCooldownSec > 0 ||
-                 !fullRedeployConfigured
-               }
-               style={{
-                 background: '#424242',
-                 border: '1px solid #666',
-                 padding: '10px 16px',
-                 borderRadius: '8px',
-                 color: fullRedeployCooldownSec > 0 ? '#888' : '#ddd',
-                 cursor:
+             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+               <button
+                 type="button"
+                 onClick={openFullRedeployConfirm}
+                 disabled={
                    isThemeLoading ||
                    fullRedeployBusy ||
                    fullRedeployCooldownSec > 0 ||
                    !fullRedeployConfigured
-                     ? 'not-allowed'
-                     : 'pointer',
-                 opacity:
-                   isThemeLoading ||
-                   fullRedeployBusy ||
-                   fullRedeployCooldownSec > 0 ||
+                 }
+                 style={{
+                   background: fullRedeployCooldownSec > 0 ? '#424242' : '#9a6dd7',
+                   border: fullRedeployCooldownSec > 0 ? '1px solid #666' : '1px solid #9a6dd7',
+                   padding: '10px 16px',
+                   borderRadius: '8px',
+                   color: fullRedeployCooldownSec > 0 ? '#888' : '#fff',
+                   cursor:
+                     isThemeLoading ||
+                     fullRedeployBusy ||
+                     fullRedeployCooldownSec > 0 ||
+                     !fullRedeployConfigured
+                       ? 'not-allowed'
+                       : 'pointer',
+                   opacity:
+                     isThemeLoading ||
+                     fullRedeployBusy ||
+                     fullRedeployCooldownSec > 0 ||
+                     !fullRedeployConfigured
+                       ? 0.45
+                       : 1,
+                   fontSize: '13px',
+                   fontWeight: 'bold',
+                   whiteSpace: 'nowrap',
+                   boxShadow: fullRedeployCooldownSec > 0 ? 'none' : '0 2px 8px rgba(154,109,215,0.3)',
+                 }}
+                 title={
                    !fullRedeployConfigured
-                     ? 0.45
-                     : 1,
-                 fontSize: '13px',
-                 fontWeight: 'bold',
-                 whiteSpace: 'nowrap',
-               }}
-               title={
-                 !fullRedeployConfigured
-                   ? '未配置 Vercel 部署钩子，请联系管理'
-                   : fullRedeployCooldownSec > 0
-                     ? `全量刷新冷却中（约 ${Math.ceil(fullRedeployCooldownSec / 3600)} 小时后可再用）`
-                     : '触发 Vercel 全量重部署（24 小时内仅一次）'
-               }
-             >
-               {fullRedeployBusy ? '触发中…' : '全量刷新'}
-             </button>
+                     ? '未配置 Vercel 部署钩子，请联系管理'
+                     : fullRedeployCooldownSec > 0
+                       ? '今日已执行全量更新，请等待24h后尝试'
+                       : '触发 Vercel 全量重部署（24 小时内仅一次）'
+                 }
+               >
+                 {fullRedeployBusy ? '触发中…' : '全量刷新'}
+               </button>
+               {fullRedeployCooldownSec > 0 && (
+                 <span style={{ fontSize: '11px', color: '#888', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
+                   今日已执行全量更新，请等待24h后尝试
+                 </span>
+               )}
+             </div>
              <button
                type="button"
                onClick={handleManualDeploy}
