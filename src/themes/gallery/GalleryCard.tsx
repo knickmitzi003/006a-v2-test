@@ -36,6 +36,7 @@ export const GalleryCard = ({ post }: { post: Post }) => {
   const downloadHref = galleryPostDownloadHref(post.slug)
   const tags = post.tags?.filter((t) => t.name) ?? []
   const categoryName = post.category?.name?.trim()
+  const downloadCount = post.options?.downloadCount?.trim()
   const { isLoading, isStalled, isReloading, startNav } = useGalleryNavLoading()
   const loading = isLoading(post.slug)
 
@@ -59,6 +60,14 @@ export const GalleryCard = ({ post }: { post: Post }) => {
               </div>
             )}
             {loading ? <GalleryCardLoading stalled={isStalled(post.slug)} reloading={isReloading(post.slug)} /> : null}
+            {downloadCount ? (
+              <span
+                className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-white"
+                aria-label={`包含 ${downloadCount} 个媒体`}
+              >
+                {downloadCount}
+              </span>
+            ) : null}
           </div>
         </Link>
 

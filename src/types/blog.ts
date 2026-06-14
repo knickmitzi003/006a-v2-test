@@ -100,6 +100,8 @@ export type Post = {
     download: string
     /** 资源包大小，如 639 MB；留空则下载页不展示 */
     downloadSize: string
+    /** 媒体数量，如 82P、50P+2v；留空则卡片封面不展示 */
+    downloadCount: string
   }
 }
 

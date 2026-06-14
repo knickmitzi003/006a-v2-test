@@ -24,6 +24,18 @@ import {
   isVideoImageContent,
   serializeBlocksForSave,
 } from '@/src/lib/admin/contentMediaFlush';
+import {
+  parseSmartPostBySelection,
+  inferRulesFromExample,
+  findExistingOption,
+} from '@/src/lib/blog/smartPostParse';
+import {
+  getAllSmartParseTemplates,
+  addSmartParseTemplate,
+  deleteSmartParseTemplate,
+  SMART_PARSE_TEMPLATE_AUTO,
+  BUILTIN_STANDARD_TEMPLATE_ID,
+} from '@/src/lib/blog/smartParseTemplates';
 
 async function triggerContentRevalidation(payload = {}) {
   try {
@@ -2353,7 +2365,7 @@ const [mounted, setMounted] = useState(false);
   const [showAllTags, setShowAllTags] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState(null);
   const [previewData, setPreviewData] = useState(null);
-  const [form, setForm] = useState({ title: '', slug: '', excerpt: '', content: '', category: '', tags: '', cover: '', status: 'Published', type: 'Post', date: '' });
+  const [form, setForm] = useState({ title: '', slug: '', excerpt: '', content: '', category: '', tags: '', cover: '', status: 'Published', type: 'Post', date: '', download: '', download_size: '', download_count: '' });
   const [currentId, setCurrentId] = useState(null);
   const [siteTitle, setSiteTitle] = useState('PROBLOG');
   const [navIdx, setNavIdx] = useState(1); 
@@ -2367,6 +2379,11 @@ const [mounted, setMounted] = useState(false);
   const blogRefreshCooldownUntilRef = useRef(0);
   const adminToastTimerRef = useRef(null);
   const [adminToast, setAdminToast] = useState({ message: '', visible: false, closing: false });
+  const [smartParseText, setSmartParseText] = useState('');
+  const [smartParsePreview, setSmartParsePreview] = useState(null);
+  const [smartParseUsedTemplate, setSmartParseUsedTemplate] = useState('');
+  const [smartParseTemplates, setSmartParseTemplates] = useState([]);
+  const [smartParseTemplateId, setSmartParseTemplateId] = useState(SMART_PARSE_TEMPLATE_AUTO);
   const [tagDraft, setTagDraft] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
   const [catDraft, setCatDraft] = useState('');
@@ -2674,6 +2691,10 @@ const [mounted, setMounted] = useState(false);
   // 🟢 6. useEffect 挂载
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
+    if (!mounted) return;
+    setSmartParseTemplates(getAllSmartParseTemplates());
+  }, [mounted]);
+  useEffect(() => {
     const tick = () => {
       const left = Math.ceil((blogRefreshCooldownUntilRef.current - Date.now()) / 1000);
       setBlogRefreshCooldownSec(left > 0 ? left : 0);
@@ -2825,6 +2846,7 @@ const [mounted, setMounted] = useState(false);
       const post = await fetchPostById(p.id);
       if (post) {
         setForm(post);
+        resetSmartParseState();
         // 优先使用后端按 Notion 原生块重建的结构化块(保留格式)，否则回退到 Markdown 解析
         const eb = (Array.isArray(post.editorBlocks) && post.editorBlocks.length)
           ? post.editorBlocks.map((b, i) => ({ ...b, id: Date.now() + i + Math.random() }))
@@ -2847,7 +2869,8 @@ const [mounted, setMounted] = useState(false);
       revokePendingEditorMedia(prev);
       return [];
     });
-    setForm({ title: '', slug: 'p-'+Date.now().toString(36), excerpt:'', content:'', category:'', tags:'', cover:'', status:'Published', type: 'Post', date: new Date().toISOString().split('T')[0] });
+    setForm({ title: '', slug: 'p-'+Date.now().toString(36), excerpt:'', content:'', category:'', tags:'', cover:'', status:'Published', type: 'Post', date: new Date().toISOString().split('T')[0], download: '', download_size: '', download_count: '' });
+    resetSmartParseState();
     setCurrentId(null);
     editingSlugRef.current = null;
     setView('edit');
@@ -3342,7 +3365,8 @@ const [mounted, setMounted] = useState(false);
     setEditorBlocks([]);
     editingSlugRef.current = null;
     setCurrentId(null);
-    setForm({ title: '', slug: '', excerpt: '', content: '', category: '', tags: '', cover: '', status: 'Published', type: 'Post', date: '' });
+    setForm({ title: '', slug: '', excerpt: '', content: '', category: '', tags: '', cover: '', status: 'Published', type: 'Post', date: '', download: '', download_size: '', download_count: '' });
+    resetSmartParseState();
     setView('list');
   };
 
@@ -3522,6 +3546,133 @@ const [mounted, setMounted] = useState(false);
     if (n) setCategory(n);
     setCatDraft('');
     setShowCatInput(false);
+  };
+
+  const resetSmartParseState = () => {
+    setSmartParseText('');
+    setSmartParsePreview(null);
+    setSmartParseUsedTemplate('');
+  };
+
+  const refreshSmartParseTemplates = () => {
+    const all = getAllSmartParseTemplates();
+    setSmartParseTemplates(all);
+    return all;
+  };
+
+  const runSmartParse = (textOverride) => {
+    const input = (textOverride ?? smartParseText).trim();
+    if (!input) return;
+
+    const templates = smartParseTemplates.length
+      ? smartParseTemplates
+      : refreshSmartParseTemplates();
+    const outcome = parseSmartPostBySelection(
+      input,
+      templates,
+      smartParseTemplateId
+    );
+    const parsed = outcome.result;
+
+    setSmartParsePreview(parsed);
+    setSmartParseUsedTemplate(outcome.templateName);
+
+    const formUpdates = {};
+    if (parsed.title) formUpdates.title = parsed.title;
+    if (parsed.downloadSize) formUpdates.download_size = parsed.downloadSize;
+    if (parsed.downloadCount) formUpdates.download_count = parsed.downloadCount;
+
+    if (parsed.category) {
+      const cat =
+        findExistingOption(parsed.category, options.categories) ||
+        parsed.category.trim();
+      formUpdates.category = cat;
+      if (cat && !options.categories.includes(cat)) {
+        setOptions((o) => ({
+          ...o,
+          categories: [...o.categories, cat].sort((a, b) =>
+            a.localeCompare(b, 'zh-CN')
+          ),
+        }));
+      }
+    }
+
+    if (parsed.tags?.length) {
+      const current = (form.tags || '')
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const merged = [...current];
+      const newTagNames = [];
+
+      parsed.tags.forEach((tag) => {
+        const raw = (tag || '').trim();
+        if (!raw) return;
+        const existing = findExistingOption(raw, options.tags);
+        const name = existing || raw;
+        const dup = merged.some((m) => m.toLowerCase() === name.toLowerCase());
+        if (!dup) merged.push(name);
+        if (!existing && !options.tags.some((o) => o.toLowerCase() === name.toLowerCase())) {
+          newTagNames.push(name);
+        }
+      });
+
+      formUpdates.tags = merged.join(',');
+      if (newTagNames.length) {
+        setOptions((o) => ({
+          ...o,
+          tags: [...o.tags, ...newTagNames].sort((a, b) =>
+            a.localeCompare(b, 'zh-CN')
+          ),
+        }));
+      }
+    }
+
+    if (Object.keys(formUpdates).length > 0) {
+      setForm((f) => ({ ...f, ...formUpdates }));
+    }
+  };
+
+  const handleSmartParsePaste = (e) => {
+    const pasted = e.clipboardData.getData('text').trim();
+    if (!pasted) return;
+    e.preventDefault();
+    setSmartParseText(pasted);
+    runSmartParse(pasted);
+  };
+
+  const saveSmartParseAsTemplate = () => {
+    const example = smartParseText.trim();
+    if (!example) {
+      showAdminToast('请先粘贴或输入示例标题串');
+      return;
+    }
+    const defaultName =
+      example.length > 36 ? `${example.slice(0, 36)}…` : example;
+    const name = prompt('模板名称（便于在下拉框中识别）', defaultName);
+    if (!name || !name.trim()) return;
+    const rules = inferRulesFromExample(example);
+    const tpl = addSmartParseTemplate(name.trim(), example, rules);
+    refreshSmartParseTemplates();
+    setSmartParseTemplateId(tpl.id);
+    showAdminToast(`已保存模板「${tpl.name}」`);
+  };
+
+  const removeSelectedSmartParseTemplate = () => {
+    if (
+      smartParseTemplateId === SMART_PARSE_TEMPLATE_AUTO ||
+      smartParseTemplateId === BUILTIN_STANDARD_TEMPLATE_ID
+    ) {
+      showAdminToast('内置模板与自动匹配不可删除');
+      return;
+    }
+    const tpl = smartParseTemplates.find((t) => t.id === smartParseTemplateId);
+    if (!tpl) return;
+    if (!confirm(`确定删除模板「${tpl.name}」？`)) return;
+    deleteSmartParseTemplate(smartParseTemplateId);
+    refreshSmartParseTemplates();
+    setSmartParseTemplateId(SMART_PARSE_TEMPLATE_AUTO);
+    showAdminToast('模板已删除');
   };
   const handlePublishDateSelect = (key) => {
     if (key == null) {
@@ -3971,13 +4122,114 @@ const [mounted, setMounted] = useState(false);
                    🖼️ <b style={{color:'greenyellow'}}>封面说明</b>：系统会将正文中的第一个图片块设为文章封面，请把用作封面的图片块放在最前。
                  </div>
                ) : null}
+               {!editingSimplePage ? (
+                 <div style={{ marginBottom: '18px', padding: '14px', borderRadius: '10px', border: '1px solid #3a3a42', background: '#1a1a1e' }}>
+                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
+                     <label style={{ fontSize: '12px', color: '#ccc', fontWeight: 'bold' }}>智能识别</label>
+                     <button
+                       type="button"
+                       onClick={runSmartParse}
+                       disabled={!smartParseText.trim()}
+                       style={{
+                         padding: '6px 14px',
+                         borderRadius: '8px',
+                         border: 'none',
+                         background: smartParseText.trim() ? 'greenyellow' : '#333',
+                         color: smartParseText.trim() ? '#000' : '#666',
+                         fontSize: '12px',
+                         fontWeight: 'bold',
+                         cursor: smartParseText.trim() ? 'pointer' : 'not-allowed',
+                       }}
+                     >
+                       识别并填入
+                     </button>
+                   </div>
+                   <p style={{ fontSize: '11px', color: '#777', margin: '0 0 10px', lineHeight: 1.55 }}>
+                     粘贴整行标题串将自动识别并填入标题、分类、标签、资源数量与大小；也可手动编辑后点「识别并填入」。分类与标签会直接写入对应栏位，有误可自行修改。
+                   </p>
+                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
+                     <label style={{ fontSize: '11px', color: '#888' }}>识别模板</label>
+                     <select
+                       className="glow-input"
+                       value={smartParseTemplateId}
+                       onChange={(e) => setSmartParseTemplateId(e.target.value)}
+                       style={{ flex: '1 1 200px', minWidth: '180px', fontSize: '12px', padding: '6px 10px' }}
+                     >
+                       <option value={SMART_PARSE_TEMPLATE_AUTO}>自动匹配（推荐）</option>
+                       {smartParseTemplates.map((tpl) => (
+                         <option key={tpl.id} value={tpl.id}>
+                           {tpl.builtIn ? '★ ' : ''}{tpl.name}
+                         </option>
+                       ))}
+                     </select>
+                     <button
+                       type="button"
+                       onClick={saveSmartParseAsTemplate}
+                       style={{
+                         padding: '6px 12px',
+                         borderRadius: '8px',
+                         border: '1px solid #555',
+                         background: '#2a2a2e',
+                         color: '#ccc',
+                         fontSize: '11px',
+                         cursor: 'pointer',
+                       }}
+                     >
+                       存为模板
+                     </button>
+                     <button
+                       type="button"
+                       onClick={removeSelectedSmartParseTemplate}
+                       style={{
+                         padding: '6px 12px',
+                         borderRadius: '8px',
+                         border: '1px solid #555',
+                         background: 'transparent',
+                         color: '#888',
+                         fontSize: '11px',
+                         cursor: 'pointer',
+                       }}
+                     >
+                       删除所选
+                     </button>
+                   </div>
+                   <p style={{ fontSize: '10px', color: '#666', margin: '0 0 10px', lineHeight: 1.5 }}>
+                     添加模板：在下方输入框粘贴一条符合该站点格式的示例标题，点「存为模板」并命名。之后选该模板或「自动匹配」即可复用规则。
+                   </p>
+                   <textarea
+                     className="glow-input"
+                     value={smartParseText}
+                     onChange={(e) => setSmartParseText(e.target.value)}
+                     onPaste={handleSmartParsePaste}
+                     placeholder="粘贴即识别，例如：[XIAOYUKIKO] [82P - 22MB] 药师少女的独语 - 猫猫"
+                     style={{ minHeight: '72px', fontSize: '13px', lineHeight: 1.5 }}
+                   />
+                   {smartParsePreview && (
+                     <div style={{ marginTop: '10px', fontSize: '11px', color: '#888', lineHeight: 1.6 }}>
+                       识别结果：
+                       {smartParsePreview.title ? <span> 标题「{smartParsePreview.title}」</span> : null}
+                       {smartParsePreview.category ? <span> · 分类「{smartParsePreview.category}」</span> : null}
+                       {smartParsePreview.tags?.length ? <span> · 标签「{smartParsePreview.tags.join('、')}」</span> : null}
+                       {smartParsePreview.downloadCount ? <span> · 数量 {smartParsePreview.downloadCount}</span> : null}
+                       {smartParsePreview.downloadSize ? <span> · 大小 {smartParsePreview.downloadSize}</span> : null}
+                       {smartParseUsedTemplate ? <span style={{ color: '#666' }}> · 模板「{smartParseUsedTemplate}」</span> : null}
+                       <span style={{ color: '#555' }}> （{smartParsePreview.confidence === 'high' ? '格式匹配度高' : smartParsePreview.confidence === 'medium' ? '部分匹配' : '请核对'}）</span>
+                     </div>
+                   )}
+                 </div>
+               ) : null}
                <div style={{marginBottom:'15px'}}><label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'5px'}}>标题 <span style={{color: '#ff4d4f'}}>*</span></label><input className="glow-input" value={form.title} onChange={e=>setForm({...form, title:e.target.value})} placeholder="输入标题" /></div>
                <div style={{marginBottom:'15px'}}><label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'5px'}}>摘要</label><input className="glow-input" value={form.excerpt} onChange={e=>setForm({...form, excerpt:e.target.value})} placeholder="输入摘要" /></div>
                {!editingSimplePage ? (
                <div style={{marginTop:'4px', paddingTop:'16px', borderTop:'1px solid #333'}}>
-                 <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'6px'}}>下载信息 <GalleryOnlyTag /></label>
-                 <p style={{fontSize:'11px', color:'#777', margin:'0 0 8px', lineHeight:1.5}}>Gallery 主题会展示下载按钮，对应此处填写内容。可写说明 + 链接，例如：下载链接：https://xxx.xxpan.com</p>
-                 <input className="glow-input" value={form.download || ''} onChange={e=>setForm({...form, download:e.target.value})} placeholder="输入下载链接，留空则显示「暂无下载」" style={{fontSize:'13px'}} />
+                 <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'6px'}}>下载链接 <GalleryOnlyTag /></label>
+                 <p style={{fontSize:'11px', color:'#777', margin:'0 0 8px', lineHeight:1.5}}>Gallery 主题下载弹窗中展示的链接内容，留空则显示「暂无下载」。</p>
+                 <input className="glow-input" value={form.download || ''} onChange={e=>setForm({...form, download:e.target.value})} placeholder="例如：https://xxx.xxpan.com" style={{fontSize:'13px'}} />
+                 <div style={{marginTop:'12px'}}>
+                   <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'6px'}}>下载信息（数量） <GalleryOnlyTag /></label>
+                   <input className="glow-input" value={form.download_count || ''} onChange={e=>setForm({...form, download_count:e.target.value})} placeholder="例如：82P、50P+2v" style={{fontSize:'13px'}} />
+                   <p style={{fontSize:'11px', color:'#777', margin:'6px 0 0', lineHeight:1.5}}>填写后显示在首页卡片封面右下角，留空则不显示。</p>
+                 </div>
                  <div style={{marginTop:'12px'}}>
                    <label style={{display:'block', fontSize:'11px', color:'#bbb', marginBottom:'6px'}}>资源包大小 <GalleryOnlyTag /></label>
                    <input className="glow-input" value={form.download_size || ''} onChange={e=>setForm({...form, download_size:e.target.value})} placeholder="例如：639 MB、1.2 GB" style={{fontSize:'13px'}} />

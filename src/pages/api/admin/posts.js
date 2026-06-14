@@ -57,6 +57,9 @@ export default async function handler(req, res) {
           : p.download?.url) || '',
         download_size: (p.download_size?.type === 'rich_text'
           ? (p.download_size.rich_text || []).map((t) => t.plain_text).join('')
+          : '') || '',
+        download_count: (p.download_count?.type === 'rich_text'
+          ? (p.download_count.rich_text || []).map((t) => t.plain_text).join('')
           : '') || ''
       };
     });

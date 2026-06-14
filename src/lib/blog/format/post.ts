@@ -49,8 +49,14 @@ const formatPost = async (
     tags,
     ...extraProperties
   } = properties
-  const { color_title, original_cover, repost, download, download_size } =
-    extraProperties
+  const {
+    color_title,
+    original_cover,
+    repost,
+    download,
+    download_size,
+    download_count,
+  } = extraProperties
 
   const postTitle = title.type === 'title' && title.title[0]?.plain_text
   const postStatus =
@@ -145,6 +151,10 @@ const formatPost = async (
       (download_size?.type === 'rich_text' &&
         download_size.rich_text?.map((t) => t.plain_text).join('')) ||
       '',
+    downloadCount:
+      (download_count?.type === 'rich_text' &&
+        download_count.rich_text?.map((t) => t.plain_text).join('')) ||
+      '',
   }
 
   const formattedPost = {
@@ -182,6 +192,7 @@ const formatPost = async (
       repost: postOptions.repost ?? '',
       download: postOptions.download ?? '',
       downloadSize: postOptions.downloadSize ?? '',
+      downloadCount: postOptions.downloadCount ?? '',
     },
   } as Post
   return formattedPost
