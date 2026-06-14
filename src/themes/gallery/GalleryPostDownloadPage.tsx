@@ -9,7 +9,7 @@ import { GalleryAdBanner } from './GalleryAdBanner'
 import { GalleryBreadcrumb } from './GalleryBreadcrumb'
 import { GalleryPostDownloadActions } from './GalleryPostDownloadActions'
 import { GalleryPostStats } from './GalleryPostStats'
-import { GalleryPostTitleDownloadMeta } from './GalleryPostTitleDownloadMeta'
+import { GalleryPostTitleLine } from './GalleryPostTitleDownloadMeta'
 import { galleryEpicBarTitleClass, galleryDownloadInstructionsClass } from './galleryFonts'
 
 type GalleryPostDownloadPageProps = {
@@ -59,11 +59,8 @@ export function GalleryPostDownloadPage({
 
       <main className="flex flex-1 flex-col bg-white px-6 py-5 pb-10">
         <div className="w-full">
-          <div className="mb-5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-neutral-200 pb-3">
-            <h1 className={`min-w-0 ${galleryEpicBarTitleClass}`}>
-              {post.title}
-            </h1>
-            <GalleryPostTitleDownloadMeta
+          <div className="mb-5 border-b border-neutral-200 pb-3">
+            <GalleryPostTitleLine
               post={post}
               titleClass={galleryEpicBarTitleClass}
             />

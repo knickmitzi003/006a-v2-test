@@ -1,9 +1,10 @@
 import { Post } from '@/src/types/blog'
 
-type GalleryPostTitleDownloadMetaProps = {
+type GalleryPostTitleLineProps = {
   post: Post
-  /** 与同行标题共用字号/字重类名 */
+  /** 与标题行共用字号/字重类名 */
   titleClass: string
+  className?: string
 }
 
 const SIZE_IN_TEXT_RE = /\d+(?:\.\d+)?\s*(?:MB|GB|GiB|KB|TB)\b/i
@@ -23,22 +24,26 @@ function splitCountAndSize(rawCount: string, rawSize: string) {
   }
 }
 
-/** 标题旁下载元信息：文件数量 + 资源大小 */
-export function GalleryPostTitleDownloadMeta({
+/** 文章内页 / 下载页标题行：分类名 + 标题 + 下载信息（数量与大小） */
+export function GalleryPostTitleLine({
   post,
   titleClass,
-}: GalleryPostTitleDownloadMetaProps) {
+  className = '',
+}: GalleryPostTitleLineProps) {
+  const categoryName = post.category?.name?.trim() ?? ''
   const { count, size } = splitCountAndSize(
     post.options?.downloadCount ?? '',
     post.options?.downloadSize ?? ''
   )
-  if (!count && !size) return null
-
-  const text = [count, size].filter(Boolean).join(' ')
+  const downloadText = [count, size].filter(Boolean).join(' ')
 
   return (
-    <span className={`shrink-0 whitespace-nowrap ${titleClass}`}>
-      {text}
-    </span>
+    <h1 className={`min-w-0 ${titleClass} ${className}`.trim()}>
+      <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        {categoryName ? <span>{categoryName}</span> : null}
+        <span>{post.title}</span>
+        {downloadText ? <span>{downloadText}</span> : null}
+      </span>
+    </h1>
   )
 }

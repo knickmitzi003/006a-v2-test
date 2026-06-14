@@ -12,7 +12,7 @@ import { GalleryPostDownloadButton } from './GalleryPostDownloadButton'
 import { GalleryPostContent } from './GalleryPostContent'
 import { GalleryPostRecommendations } from './GalleryPostRecommendations'
 import { GalleryPostStats } from './GalleryPostStats'
-import { GalleryPostTitleDownloadMeta } from './GalleryPostTitleDownloadMeta'
+import { GalleryPostTitleLine } from './GalleryPostTitleDownloadMeta'
 import { galleryContentContainerClass, galleryPostTitleClass } from './galleryFonts'
 
 type GalleryPostProps = {
@@ -62,15 +62,11 @@ export const GalleryPost = ({
         <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-0 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">
           <article className={`${galleryContentContainerClass} min-w-0 flex-1`}>
             <div className="mb-3 flex items-start justify-between gap-3 sm:gap-6">
-              <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <h1 className={`min-w-0 ${galleryPostTitleClass}`}>
-                  {post.title}
-                </h1>
-                <GalleryPostTitleDownloadMeta
-                  post={post}
-                  titleClass={galleryPostTitleClass}
-                />
-              </div>
+              <GalleryPostTitleLine
+                post={post}
+                titleClass={galleryPostTitleClass}
+                className="flex-1"
+              />
               <div className="shrink-0 pt-0.5">
                 <GalleryPostDownloadButton postSlug={post.slug} />
               </div>
