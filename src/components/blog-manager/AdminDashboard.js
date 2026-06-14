@@ -476,8 +476,10 @@ const GlobalStyle = () => (
     .block-minimap-del:hover { transform: scale(1.08); background: #ff7875; }
     .acc-btn { width: 100%; background: #424242; padding: 15px 20px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; border: 1px solid #555; color: #fff; margin-bottom: 10px; transition: 0.2s; }
     .acc-btn:hover { border-color: greenyellow; color: greenyellow; }
-    .acc-content { overflow: hidden; transition: max-height 0.3s ease; max-height: 0; padding: 0 10px; }
-    .acc-content.open { max-height: 500px; padding-bottom: 20px; }
+    .acc-content { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.32s ease; padding: 0 10px; }
+    .acc-content.open { grid-template-rows: 1fr; padding-bottom: 20px; }
+    .acc-content-inner { overflow: hidden; min-height: 0; }
+    .acc-content.open .acc-content-inner { overflow: visible; }
     .neo-btn { --bg: #000; --hover-bg: #ff90e8; --hover-text: #000; color: #fff; cursor: pointer; border: 1px solid var(--bg); border-radius: 4px; padding: 0.8em 2em; background: var(--bg); transition: 0.2s; display: flex; justify-content: center; align-items: center; font-weight: bold; gap: 8px; }
     .neo-btn:hover { color: var(--hover-text); transform: translate(-0.25rem, -0.25rem); background: var(--hover-bg); box-shadow: 0.25rem 0.25rem var(--bg); border-color: var(--hover-bg); }
     .neo-btn:active { transform: translate(0); box-shadow: none; }
@@ -578,7 +580,9 @@ const StepAccordion = ({ step, title, isOpen, onToggle, children }) => (
       <div style={{fontWeight:'bold'}}><span style={{color:'greenyellow', marginRight:'10px'}}>Step {step}</span>{title}</div>
       <div style={{transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition:'0.3s'}}><Icons.ChevronDown /></div>
     </div>
-    <div className={`acc-content ${isOpen ? 'open' : ''}`}>{children}</div>
+    <div className={`acc-content ${isOpen ? 'open' : ''}`}>
+      <div className="acc-content-inner">{children}</div>
+    </div>
   </div>
 );
 
