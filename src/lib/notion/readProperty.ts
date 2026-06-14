@@ -73,7 +73,24 @@ export function readPageCoverUrl(
 const COVER_PROPERTY_NAMES = ['cover', 'Cover', 'COVER', '封面']
 const COVER_DARK_PROPERTY_NAMES = ['cover_dark', 'Cover Dark', 'coverDark', 'Cover_Dark']
 
-function pickNotionProperty(
+export const DOWNLOAD_SIZE_PROPERTY_NAMES = [
+  'download_size',
+  'Download_size',
+  'downloadSize',
+  'Download Size',
+  '资源包大小',
+  '资源大小',
+]
+
+export const DOWNLOAD_COUNT_PROPERTY_NAMES = [
+  'download_count',
+  'Download_count',
+  'downloadCount',
+  '下载信息（数量）',
+  '下载数量',
+]
+
+export function pickNotionProperty(
   properties: PageObjectResponse['properties'],
   names: string[]
 ) {
@@ -102,4 +119,34 @@ export function readCoverDarkFromPageProperties(
   return readNotionCoverUrl(
     pickNotionProperty(properties, COVER_DARK_PROPERTY_NAMES)
   )
+}
+
+export function readDownloadSizeFromPageProperties(
+  properties: PageObjectResponse['properties']
+): string {
+  return readRichTextPlain(
+    pickNotionProperty(properties, DOWNLOAD_SIZE_PROPERTY_NAMES)
+  ) ?? ''
+}
+
+export function readDownloadCountFromPageProperties(
+  properties: PageObjectResponse['properties']
+): string {
+  return readRichTextPlain(
+    pickNotionProperty(properties, DOWNLOAD_COUNT_PROPERTY_NAMES)
+  ) ?? ''
+}
+
+export function findNotionPropertyKey(
+  properties: PageObjectResponse['properties'],
+  names: string[]
+): string | undefined {
+  for (const name of names) {
+    if (properties[name]) return name
+  }
+  const lowered = new Set(names.map((n) => n.toLowerCase()))
+  for (const key of Object.keys(properties)) {
+    if (lowered.has(key.toLowerCase())) return key
+  }
+  return undefined
 }

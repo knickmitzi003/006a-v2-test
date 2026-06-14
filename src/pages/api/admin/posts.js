@@ -1,5 +1,6 @@
 import { Client } from '@notionhq/client';
 import { readPinnedFromNotionProperties } from '@/src/lib/blog/pinnedPosts';
+import { readDownloadSizeFromPageProperties, readDownloadCountFromPageProperties } from '@/src/lib/notion/readProperty';
 
 export default async function handler(req, res) {
   const notion = new Client({ auth: process.env.NOTION_KEY || process.env.NOTION_TOKEN });
@@ -55,12 +56,8 @@ export default async function handler(req, res) {
         download: (p.download?.type === 'rich_text'
           ? (p.download.rich_text || []).map((t) => t.plain_text).join('')
           : p.download?.url) || '',
-        download_size: (p.download_size?.type === 'rich_text'
-          ? (p.download_size.rich_text || []).map((t) => t.plain_text).join('')
-          : '') || '',
-        download_count: (p.download_count?.type === 'rich_text'
-          ? (p.download_count.rich_text || []).map((t) => t.plain_text).join('')
-          : '') || ''
+        download_size: readDownloadSizeFromPageProperties(p),
+        download_count: readDownloadCountFromPageProperties(p),
       };
     });
 

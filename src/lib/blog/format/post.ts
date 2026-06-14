@@ -8,7 +8,7 @@ import {
   readPinnedFromNotionProperties,
   sortPostsByPinnedThenDate,
 } from '../pinnedPosts'
-import { readCoverDarkFromPageProperties, readCoverFromPageProperties, readPageCoverUrl } from '../../notion/readProperty'
+import { readCoverDarkFromPageProperties, readCoverFromPageProperties, readPageCoverUrl, readDownloadSizeFromPageProperties, readDownloadCountFromPageProperties } from '../../notion/readProperty'
 import { getImageInfo } from '../getImageInfo'
 
 export type FormatPostOptions = {
@@ -49,14 +49,7 @@ const formatPost = async (
     tags,
     ...extraProperties
   } = properties
-  const {
-    color_title,
-    original_cover,
-    repost,
-    download,
-    download_size,
-    download_count,
-  } = extraProperties
+  const { color_title, original_cover, repost, download } = extraProperties
 
   const postTitle = title.type === 'title' && title.title[0]?.plain_text
   const postStatus =
@@ -147,14 +140,8 @@ const formatPost = async (
         download.rich_text?.map((t) => t.plain_text).join('')) ||
       (download?.type === 'url' && download.url) ||
       '',
-    downloadSize:
-      (download_size?.type === 'rich_text' &&
-        download_size.rich_text?.map((t) => t.plain_text).join('')) ||
-      '',
-    downloadCount:
-      (download_count?.type === 'rich_text' &&
-        download_count.rich_text?.map((t) => t.plain_text).join('')) ||
-      '',
+    downloadSize: readDownloadSizeFromPageProperties(properties),
+    downloadCount: readDownloadCountFromPageProperties(properties),
   }
 
   const formattedPost = {
