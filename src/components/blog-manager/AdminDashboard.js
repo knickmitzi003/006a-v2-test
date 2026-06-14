@@ -463,18 +463,16 @@ const GlobalStyle = () => (
     .block-card-wrap.is-file-drop-before .block-card { border-color: greenyellow; box-shadow: inset 0 4px 0 0 greenyellow, 0 0 18px rgba(173, 255, 47, 0.4); }
     .block-card-wrap.is-file-drop-after .block-card { border-color: greenyellow; box-shadow: inset 0 -4px 0 0 greenyellow, 0 0 18px rgba(173, 255, 47, 0.4); }
     .block-minimap.is-file-drop-empty { border-color: greenyellow; box-shadow: 0 0 0 2px rgba(173, 255, 47, 0.35), inset 0 0 40px rgba(173, 255, 47, 0.06); }
-    .block-view-toolbar { display: flex; align-items: center; justify-content: center; margin-bottom: 16px; flex-direction: column; gap: 10px; }
+    .block-view-toolbar { display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
     .block-view-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
-    .block-compact-select-toggle { border: none; min-width: 0; height: 2.1em; padding: 0 0.85em; border-radius: 999px; display: inline-flex; justify-content: center; align-items: center; gap: 5px; background: #1C1A1C; cursor: pointer; transition: all 0.25s ease; font-family: inherit; }
-    .block-compact-select-toggle .view-mode-text { font-weight: 600; color: #AAAAAA; font-size: 11px; white-space: nowrap; line-height: 1; transition: color 0.25s ease; }
-    .block-compact-select-toggle:hover, .block-compact-select-toggle.is-active { background: greenyellow; box-shadow: 0 0 0 2px rgba(173,255,47,0.35), 0 0 20px rgba(173,255,47,0.35); transform: translateY(-1px); }
-    .block-compact-select-toggle:hover .view-mode-text, .block-compact-select-toggle.is-active .view-mode-text { color: #000; }
-    .block-compact-select-toggle:active { transform: translateY(0); }
-    .block-compact-multiselect-bar { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 8px 14px; border-radius: 10px; background: #1a1a1e; border: 1px solid #3a3a42; }
-    .block-compact-multiselect-count { font-size: 12px; color: #bbb; }
-    .block-compact-multiselect-del { border: none; border-radius: 8px; padding: 7px 16px; font-size: 12px; font-weight: bold; cursor: pointer; background: #ff4d4f; color: #fff; transition: background 0.15s, opacity 0.15s, transform 0.15s; }
+    .block-minimap-toolbar { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 12px; margin-bottom: 12px; flex-shrink: 0; }
+    .block-compact-select-toggle { border: 1px solid #555; min-height: 38px; padding: 10px 22px; border-radius: 10px; display: inline-flex; justify-content: center; align-items: center; background: #1c1c1f; cursor: pointer; transition: all 0.2s ease; font-family: inherit; font-size: 13px; font-weight: bold; color: #ccc; white-space: nowrap; line-height: 1.2; }
+    .block-compact-select-toggle:hover { border-color: greenyellow; color: greenyellow; background: rgba(173,255,47,0.08); }
+    .block-compact-select-toggle.is-active { border-color: greenyellow; background: greenyellow; color: #000; box-shadow: 0 0 0 2px rgba(173,255,47,0.35), 0 0 18px rgba(173,255,47,0.3); }
+    .block-compact-select-toggle.is-active:hover { background: #c4f74a; color: #000; }
+    .block-compact-multiselect-del { border: none; border-radius: 10px; min-height: 38px; padding: 10px 22px; font-size: 13px; font-weight: bold; cursor: pointer; background: #ff4d4f; color: #fff; transition: background 0.15s, opacity 0.15s, transform 0.15s; white-space: nowrap; line-height: 1.2; }
     .block-compact-multiselect-del:hover:not(:disabled) { background: #ff7875; transform: translateY(-1px); }
-    .block-compact-multiselect-del:disabled { opacity: 0.45; cursor: not-allowed; }
+    .block-compact-multiselect-del:disabled { opacity: 0.4; cursor: not-allowed; }
     .block-minimap-item.is-select-mode { cursor: pointer; }
     .block-minimap-item.is-select-mode:active { cursor: pointer; }
     .block-minimap-item.is-selected { border-color: greenyellow; box-shadow: 0 0 0 2px rgba(173,255,47,0.55), 0 0 18px rgba(173,255,47,0.3); }
@@ -1801,6 +1799,36 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
     </div>
   );
 
+  const renderCompactMinimapToolbar = () => (
+    <div className="block-minimap-toolbar">
+      <button
+        type="button"
+        className={`block-compact-select-toggle${compactMultiSelect ? ' is-active' : ''}`}
+        onClick={toggleCompactMultiSelect}
+        aria-pressed={compactMultiSelect}
+        title={compactMultiSelect ? '退出多选模式' : '多选内容块以批量删除'}
+      >
+        {compactMultiSelect
+          ? compactSelectedIds.length
+            ? `多选中 · 已选 ${compactSelectedIds.length} 项`
+            : '多选中'
+          : '多选'}
+      </button>
+      {compactMultiSelect ? (
+        <button
+          type="button"
+          className="block-compact-multiselect-del"
+          disabled={!compactSelectedIds.length}
+          onClick={removeSelectedBlocks}
+        >
+          删除选中
+        </button>
+      ) : (
+        <span />
+      )}
+    </div>
+  );
+
   const renderFloatingBlockTypeMenu = () => {
     if (!addMenuFor || !addMenuLayout) return null;
     const { left, anchorY, openAbove } = addMenuLayout;
@@ -2387,33 +2415,7 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
             active={blockViewMode === 'compact'}
             onClick={() => setBlockViewMode('compact')}
           />
-          {blockViewMode === 'compact' ? (
-            <button
-              type="button"
-              className={`block-compact-select-toggle${compactMultiSelect ? ' is-active' : ''}`}
-              onClick={toggleCompactMultiSelect}
-              aria-pressed={compactMultiSelect}
-              title={compactMultiSelect ? '退出多选模式' : '多选内容块以批量删除'}
-            >
-              <span className="view-mode-text">{compactMultiSelect ? '多选中' : '多选'}</span>
-            </button>
-          ) : null}
         </div>
-        {blockViewMode === 'compact' && compactMultiSelect ? (
-          <div className="block-compact-multiselect-bar">
-            <span className="block-compact-multiselect-count">
-              已选 {compactSelectedIds.length} 项
-            </span>
-            <button
-              type="button"
-              className="block-compact-multiselect-del"
-              disabled={!compactSelectedIds.length}
-              onClick={removeSelectedBlocks}
-            >
-              删除选中
-            </button>
-          </div>
-        ) : null}
       </div>
       <BlockCoverHint />
       {blockViewMode === 'compact' ? (
@@ -2447,6 +2449,7 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
               if (!e.currentTarget.contains(e.relatedTarget)) clearFileDrop();
             }}
           >
+            {renderCompactMinimapToolbar()}
             <div className="block-minimap-list">
               {blocks.map((b, index) => (
                 <React.Fragment key={b.id}>
