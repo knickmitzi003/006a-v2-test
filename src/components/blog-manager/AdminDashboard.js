@@ -367,6 +367,14 @@ const GlobalStyle = () => (
     .block-label { font-size: 12px; color: greenyellow; margin-bottom: 8px; fontWeight: bold; text-transform: uppercase; letter-spacing: 1px; }
     .block-del { width: 40px; background: #ff4d4f; border-radius: 10px; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; cursor: pointer; color: white; align-self: stretch; }
     .block-card-wrap:hover .block-del { opacity: 1; pointer-events: auto; }
+    .block-add-btn { position: absolute; right: -13px; bottom: -13px; width: 28px; height: 28px; border-radius: 50%; background: greenyellow; color: #000; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.45); opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.15s; z-index: 6; }
+    .block-card-wrap:hover .block-add-btn, .block-add-btn.open { opacity: 1; pointer-events: auto; }
+    .block-add-btn:hover { transform: scale(1.12); }
+    .block-type-menu { position: absolute; z-index: 30; background: #1f1f24; border: 1px solid #3a3a42; border-radius: 10px; padding: 6px; box-shadow: 0 10px 30px rgba(0,0,0,0.55); display: flex; flex-direction: column; gap: 2px; min-width: 150px; }
+    .block-type-menu .bt-item { padding: 8px 12px; border-radius: 6px; font-size: 13px; color: #ddd; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
+    .block-type-menu .bt-item:hover { background: #2f7cf6; color: #fff; }
+    .block-empty-add { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 26px; border: 2px dashed #555; border-radius: 12px; background: transparent; color: #ccc; font-size: 15px; font-weight: bold; cursor: pointer; transition: border-color 0.2s, color 0.2s; }
+    .block-empty-add:hover { border-color: greenyellow; color: greenyellow; }
     .block-view-toolbar { display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
     .block-view-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
     .block-view-toggle .view-mode-btn { border: none; min-width: 0; height: 2.1em; padding: 0 0.85em; border-radius: 999px; display: inline-flex; justify-content: center; align-items: center; gap: 5px; background: #1C1A1C; cursor: pointer; transition: all 450ms ease-in-out; font-family: inherit; }
@@ -1399,6 +1407,17 @@ function scrollEditView(where) {
   });
 }
 
+// 块类型选项（与顶部「添加块」按钮保持一致），用于行内「+添加块」菜单
+const BLOCK_TYPE_OPTIONS = [
+  { type: 'h1', label: '正文标题' },
+  { type: 'text', label: '📝 内容块' },
+  { type: 'image', label: '🖼️ 图片块' },
+  { type: 'quote', label: '❝ 引用' },
+  { type: 'link', label: '🔗 超链文字' },
+  { type: 'note', label: '💬 注释块' },
+  { type: 'lock', label: '🔒 加密块' },
+];
+
 const BlockBuilder = ({ blocks, setBlocks }) => {
   const [movingId, setMovingId] = useState(null);
   const [blockViewMode, setBlockViewMode] = useState('expanded');
@@ -1430,6 +1449,27 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
     setBlockViewMode('expanded');
     scrollToBlock(newId);
   };
+
+  // 行内「+添加块」菜单：值为目标块 id（插入到其后），或 'empty'（空文章顶部添加）
+  const [addMenuFor, setAddMenuFor] = useState(null);
+
+  // 在指定下标之后插入新块；index 传 -1 表示插到最前
+  const addBlockAfter = (index, type) => {
+    const newId = Date.now() + Math.random();
+    const newBlock = { id: newId, type, content: '', pwd: '', url: '', images: [], bold: false, italic: false, color: 'default' };
+    setBlocks([...blocks.slice(0, index + 1), newBlock, ...blocks.slice(index + 1)]);
+    setBlockViewMode('expanded');
+    setAddMenuFor(null);
+    scrollToBlock(newId);
+  };
+
+  const renderBlockTypeMenu = (onPick, extraStyle) => (
+    <div className="block-type-menu" style={extraStyle} onClick={(e) => e.stopPropagation()}>
+      {BLOCK_TYPE_OPTIONS.map(opt => (
+        <div key={opt.type} className="bt-item" onClick={() => onPick(opt.type)}>{opt.label}</div>
+      ))}
+    </div>
+  );
   const updateBlock = (id, val, key='content') => { setBlocks(blocks.map(b => b.id === id ? { ...b, [key]: val } : b)); };
 
   // 给当前块（h1/正文/引用/注释）选中的文字插入行内超链接，写成 [文字](url)
@@ -1749,6 +1789,9 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
   const linkModalValid = !!(linkModal && (linkModal.label || '').trim() && (linkModal.url || '').trim() && (linkModal.url || '').trim() !== 'https://');
   return (
     <div style={{marginTop:'30px'}}>
+      {addMenuFor !== null && (
+        <div onClick={() => setAddMenuFor(null)} style={{ position:'fixed', inset:0, zIndex:25 }} />
+      )}
       {linkModal && (
         <div
           onMouseDown={(e) => { if (e.target === e.currentTarget) setLinkModal(null); }}
@@ -1958,11 +2001,28 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
                  {b.error && <div className="img-err">⚠ {b.error}</div>}
                </label>
             )}
+            <div
+              className={`block-add-btn ${addMenuFor === b.id ? 'open' : ''}`}
+              title="在此块下方添加新块"
+              onClick={(e) => { e.stopPropagation(); setAddMenuFor(addMenuFor === b.id ? null : b.id); }}
+            >+</div>
+            {addMenuFor === b.id && renderBlockTypeMenu((type) => addBlockAfter(index, type), { right: '-8px', bottom: '28px' })}
             </div>
             <div className="block-del" onClick={()=>removeBlock(b.id)} title="删除此块"><Icons.Trash /></div>
           </div>
         ))}
-        {blocks.length === 0 && <div style={{textAlign:'center', color:'#666', padding:'40px', border:'2px dashed #444', borderRadius:'12px'}}>👋 正文暂无内容，请点击上方按钮添加模块，首个图片块将被作为本篇封面</div>}
+        {blocks.length === 0 && (
+          <div style={{ position:'relative' }}>
+            <div
+              className="block-empty-add"
+              onClick={(e) => { e.stopPropagation(); setAddMenuFor(addMenuFor === 'empty' ? null : 'empty'); }}
+            >
+              <span style={{ fontSize:'22px' }}>＋</span> 点击添加第一个内容块
+            </div>
+            {addMenuFor === 'empty' && renderBlockTypeMenu((type) => addBlockAfter(-1, type), { left:'50%', transform:'translateX(-50%)', top:'calc(100% + 6px)' })}
+            <div style={{ textAlign:'center', color:'#666', fontSize:'12px', marginTop:'10px' }}>首个图片块将被作为本篇封面</div>
+          </div>
+        )}
       </div>
       )}
     </div>
