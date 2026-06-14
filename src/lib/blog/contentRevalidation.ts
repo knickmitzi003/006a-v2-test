@@ -439,6 +439,11 @@ export async function collectDownloadInstructionsRevalidatePaths(): Promise<
   return Array.from(paths)
 }
 
+/** 网站标题 / 全站壳层信息：需刷新所有带导航壳的页面 */
+export async function collectSiteConfigRevalidatePaths(): Promise<string[]> {
+  return collectAllRevalidatePaths()
+}
+
 export async function revalidateMany(
   res: NextApiResponse,
   paths: string[],

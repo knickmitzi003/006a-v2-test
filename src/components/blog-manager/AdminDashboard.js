@@ -151,6 +151,8 @@ async function runBatchedRevalidation(options = {}) {
   const {
     freshTheme = false,
     listScope = 'shell',
+    warmPaths = false,
+    contentChange = false,
     onProgress,
     progressLabels = {},
   } = options;
@@ -202,6 +204,7 @@ async function runBatchedRevalidation(options = {}) {
 
   for (let i = 0; i < paths.length; i += REVALIDATE_BATCH_SIZE) {
     const batch = paths.slice(i, i + REVALIDATE_BATCH_SIZE);
+    const isLastBatch = i + REVALIDATE_BATCH_SIZE >= paths.length;
     const batchRes = await fetch('/api/admin/revalidate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -210,6 +213,8 @@ async function runBatchedRevalidation(options = {}) {
         paths: batch,
         clearCaches: i === 0,
         freshTheme,
+        warmPaths: warmPaths && isLastBatch,
+        contentChange,
       }),
     });
     const batchData = await batchRes.json();
@@ -239,6 +244,24 @@ async function runBatchedRevalidation(options = {}) {
         total,
         hint: '',
       });
+    }
+  }
+
+  if (warmPaths && paths.includes('/')) {
+    try {
+      await fetch('/api/admin/revalidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scope: 'batch',
+          paths: ['/'],
+          clearCaches: false,
+          warmPaths: true,
+          contentChange,
+        }),
+      });
+    } catch (e) {
+      console.warn('首页预热失败', e);
     }
   }
 
@@ -4205,7 +4228,7 @@ const [mounted, setMounted] = useState(false);
                      value={smartParseText}
                      onChange={(e) => setSmartParseText(e.target.value)}
                      onPaste={handleSmartParsePaste}
-                     placeholder="粘贴即识别，请注意手动调整"
+                     placeholder="粘贴到此处，将智能填入分类及标签信息，请注意手动调整"
                      style={{ minHeight: '72px', fontSize: '13px', lineHeight: 1.5 }}
                    />
                    {smartParsePreview && (

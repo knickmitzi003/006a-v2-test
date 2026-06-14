@@ -1,22 +1,59 @@
 import { Client } from '@notionhq/client';
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isTransient = (e) => {
+  const msg = String((e && e.message) || '');
+  const code = String((e && e.code) || '');
+  return /ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|socket hang up|network|fetch failed|aborted/i.test(msg)
+    || /ECONNRESET|ETIMEDOUT|EAI_AGAIN|ECONNREFUSED|ENOTFOUND/i.test(code)
+    || (e && (e.status === 429 || e.status === 502 || e.status === 503 || e.status === 504));
+};
+
+const withRetry = async (fn, retries = 4) => {
+  let lastErr;
+  for (let i = 0; i < retries; i++) {
+    try { return await fn(); }
+    catch (e) {
+      lastErr = e;
+      if (!isTransient(e) || i === retries - 1) throw e;
+      await sleep(500 * Math.pow(2, i));
+    }
+  }
+  throw lastErr;
+};
+
 export default async function handler(req, res) {
   const notion = new Client({ auth: process.env.NOTION_KEY || process.env.NOTION_TOKEN });
   const databaseId = process.env.NOTION_DATABASE_ID || process.env.NOTION_PAGE_ID;
 
+  if (!databaseId) {
+    return res.status(500).json({ success: false, error: '未配置 Notion 数据库 ID' });
+  }
+
   try {
     if (req.method === 'POST') {
-      const { title } = JSON.parse(req.body);
-      await notion.databases.update({
-        database_id: databaseId,
-        title: [{ text: { content: title } }]
-      });
-      return res.status(200).json({ success: true });
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      const title = (body?.title || '').trim();
+      if (!title) {
+        return res.status(400).json({ success: false, error: '标题不能为空' });
+      }
+
+      await withRetry(() =>
+        notion.databases.update({
+          database_id: databaseId,
+          title: [{ type: 'text', text: { content: title } }],
+        })
+      );
+
+      return res.status(200).json({ success: true, title });
     }
 
-    const response = await notion.databases.retrieve({ database_id: databaseId });
+    const response = await withRetry(() =>
+      notion.databases.retrieve({ database_id: databaseId })
+    );
     const title = response.title?.[0]?.plain_text || 'PROBLOG';
-    
+
     res.status(200).json({ success: true, siteInfo: { title } });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

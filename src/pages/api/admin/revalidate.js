@@ -2,7 +2,6 @@ import { slugify } from '@/src/lib/util'
 import CONFIG from '@/blog.config'
 import {
   clearContentBuildCaches,
-  collectAllRevalidatePaths,
   collectDeleteRevalidatePaths,
   collectDownloadInstructionsRevalidatePaths,
   collectGalleryAdRevalidatePaths,
@@ -10,6 +9,7 @@ import {
   collectPostRevalidatePaths,
   collectShellRevalidatePaths,
   collectShellWithCustomPagePaths,
+  collectSiteConfigRevalidatePaths,
   collectThemePostRevalidatePaths,
   revalidateMany,
   resolveRevalidateOrigin,
@@ -71,8 +71,8 @@ export default async function handler(req, res) {
 
     if (scope === 'list') {
       let paths = []
-      if (listScope === 'full') {
-        paths = await collectAllRevalidatePaths()
+      if (listScope === 'full' || listScope === 'site-config') {
+        paths = await collectSiteConfigRevalidatePaths()
       } else if (listScope === 'shell') {
         paths = await collectShellWithCustomPagePaths()
       } else if (listScope === 'theme') {
@@ -97,8 +97,8 @@ export default async function handler(req, res) {
     let paths
     if (scope === 'batch') {
       paths = Array.isArray(explicitPaths) ? explicitPaths : []
-    } else if (scope === 'full') {
-      paths = await collectAllRevalidatePaths()
+    } else if (scope === 'full' || scope === 'site-config') {
+      paths = await collectSiteConfigRevalidatePaths()
     } else if (scope === 'shell') {
       paths = await collectShellWithCustomPagePaths()
     } else if (scope === 'gallery-ad') {
