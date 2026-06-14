@@ -367,8 +367,8 @@ const GlobalStyle = () => (
     .block-label { font-size: 12px; color: greenyellow; margin-bottom: 8px; fontWeight: bold; text-transform: uppercase; letter-spacing: 1px; }
     .block-del { width: 40px; background: #ff4d4f; border-radius: 10px; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; cursor: pointer; color: white; align-self: stretch; }
     .block-card-wrap:hover .block-del { opacity: 1; pointer-events: auto; }
-    .block-add-btn { position: absolute; left: 50%; bottom: -38px; transform: translateX(-50%); height: 36px; padding: 0 26px; border-radius: 10px; background: greenyellow; color: #000; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: bold; line-height: 1; cursor: pointer; box-shadow: 0 3px 12px rgba(0,0,0,0.4); transition: transform 0.15s, background 0.15s, box-shadow 0.15s; z-index: 6; }
-    .block-add-btn:hover { transform: translateX(-50%) translateY(-2px); background: #c4f74a; box-shadow: 0 5px 16px rgba(0,0,0,0.45); }
+    .block-add-btn { position: absolute; right: 22px; bottom: -47px; height: 36px; padding: 0 24px; border-radius: 10px; background: greenyellow; color: #000; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: bold; line-height: 1; cursor: pointer; box-shadow: 0 3px 12px rgba(0,0,0,0.4); transition: transform 0.15s, background 0.15s, box-shadow 0.15s; z-index: 6; }
+    .block-add-btn:hover { transform: translateY(-2px); background: #c4f74a; box-shadow: 0 5px 16px rgba(0,0,0,0.45); }
     .block-add-btn.open { background: #c4f74a; }
     .block-type-menu { position: absolute; z-index: 30; background: #1f1f24; border: 1px solid #3a3a42; border-radius: 10px; padding: 6px; box-shadow: 0 10px 30px rgba(0,0,0,0.55); display: flex; flex-direction: column; gap: 2px; min-width: 150px; }
     .block-type-menu .bt-item { padding: 8px 12px; border-radius: 6px; font-size: 13px; color: #ddd; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
@@ -2006,7 +2006,7 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
               title="在此块下方添加新块"
               onClick={(e) => { e.stopPropagation(); setAddMenuFor(addMenuFor === b.id ? null : b.id); }}
             ><span style={{ fontSize: '16px', lineHeight: 1 }}>＋</span> 添加块</div>
-            {addMenuFor === b.id && renderBlockTypeMenu((type) => addBlockAfter(index, type), { left: '50%', transform: 'translateX(-50%)', top: 'calc(100% + 44px)' })}
+            {addMenuFor === b.id && renderBlockTypeMenu((type) => addBlockAfter(index, type), { right: '22px', top: 'calc(100% + 53px)' })}
             </div>
             <div className="block-del" onClick={()=>removeBlock(b.id)} title="删除此块"><Icons.Trash /></div>
           </div>
