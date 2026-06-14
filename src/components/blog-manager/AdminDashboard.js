@@ -484,7 +484,12 @@ const GlobalStyle = () => (
     .block-view-toggle .view-mode-btn:hover .view-mode-text, .block-view-toggle .view-mode-btn.is-active .view-mode-text { color: white; }
     .block-view-toggle .view-mode-btn:hover .view-mode-sparkle, .block-view-toggle .view-mode-btn.is-active .view-mode-sparkle { fill: white; transform: scale(1.15); }
     .block-view-toggle .view-mode-btn:active { transform: translateY(0); }
-    .block-minimap { display: flex; flex-direction: column; align-items: center; padding: 14px; background: #252528; border: 1px solid #333; border-radius: 12px; max-height: min(72vh, 680px); overflow-y: auto; }
+    .block-minimap { display: flex; flex-direction: column; align-items: center; padding: 14px; background: #252528; border: 1px solid #333; border-radius: 12px; max-height: min(72vh, 680px); overflow: hidden; }
+    .block-minimap-scroll { flex: 1; min-height: 0; width: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #555 #252528; }
+    .block-minimap-scroll::-webkit-scrollbar { width: 8px; }
+    .block-minimap-scroll::-webkit-scrollbar-track { background: #252528; border-radius: 4px; }
+    .block-minimap-scroll::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+    .block-minimap-scroll::-webkit-scrollbar-thumb:hover { background: #777; }
     .block-minimap-list { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
     .block-minimap-add-wrap { position: relative; display: flex; justify-content: center; align-items: center; padding: 2px 0; flex-shrink: 0; width: 100%; }
     .block-minimap-add-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px dashed #555; background: #1c1c1f; color: greenyellow; font-size: 20px; font-weight: 700; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: border-color 0.15s, background 0.15s, transform 0.15s, box-shadow 0.15s; box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
@@ -2443,14 +2448,17 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
         ) : (
           <div
             className={`block-minimap${fileDropEmpty ? ' is-file-drop-empty' : ''}`}
-            onDragOver={handleMinimapContainerDragOver}
-            onDrop={handleMinimapContainerDrop}
-            onDragLeave={(e) => {
-              if (!e.currentTarget.contains(e.relatedTarget)) clearFileDrop();
-            }}
           >
             {renderCompactMinimapToolbar()}
-            <div className="block-minimap-list">
+            <div
+              className="block-minimap-scroll"
+              onDragOver={handleMinimapContainerDragOver}
+              onDrop={handleMinimapContainerDrop}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) clearFileDrop();
+              }}
+            >
+              <div className="block-minimap-list">
               {blocks.map((b, index) => (
                 <React.Fragment key={b.id}>
                   <BlockMinimapItem
@@ -2473,6 +2481,7 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
                   {renderMinimapAddBtn(`compact-after-${b.id}`, index)}
                 </React.Fragment>
               ))}
+            </div>
             </div>
           </div>
         )
