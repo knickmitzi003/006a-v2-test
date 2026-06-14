@@ -29,6 +29,7 @@ export function LightSeoMeta({
 }: LightSeoMetaProps) {
   const name = (siteName || '').trim() || DEFAULT_SITE_NAME
   const sub = (pageSubtitle || '').trim()
+  const seoTitle = (seo?.title || '').trim()
 
   if (isAdmin) {
     return (
@@ -39,10 +40,10 @@ export function LightSeoMeta({
     )
   }
 
-  const pageTitle = seo?.title
-    ? seo.title === name
+  const pageTitle = seoTitle
+    ? seoTitle === name
       ? name
-      : `${seo.title} | ${name}`
+      : `${seoTitle} | ${name}`
     : sub && sub !== name
       ? `${sub} | ${name}`
       : name

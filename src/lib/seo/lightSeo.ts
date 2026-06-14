@@ -20,7 +20,7 @@ export type PageSeoFlat = {
 export const DEFAULT_SITE_DESCRIPTION =
   'PRO+ 一站式寄售与免费博客服务。PRO BLOG 基于 Notion 提供免费、易用的个人博客服务，帮助你快速搭建个人博客与个人主页。'
 
-export const DEFAULT_SITE_NAME = 'PRO+ Blog'
+export const DEFAULT_SITE_NAME = 'Blog'
 
 export const SITE_KEYWORDS =
   'PRO+, PRO BLOG, PRO+博客, PRO+一站式寄售, PRO+博客服务, 免费博客服务, 免费博客, 个人博客, 免费个人博客, 个人主页, 博客搭建, Notion博客'
@@ -104,10 +104,10 @@ export function buildNavPageSeo(page: Page): PageSeoFlat {
   }
 }
 
-/** 首页等列表页 */
+/** 首页：标题留空，由 LightSeoMeta 使用 Notion 数据库名作为浏览器标签 */
 export function buildHomePageSeo(): PageSeoFlat {
   return {
-    title: DEFAULT_SITE_NAME,
+    title: '',
     description: DEFAULT_SITE_DESCRIPTION,
     image: DEFAULT_OG_IMAGE,
     canonicalPath: '/',

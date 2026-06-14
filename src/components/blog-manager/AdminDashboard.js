@@ -2404,6 +2404,10 @@ const [mounted, setMounted] = useState(false);
   const [blogRefreshBusy, setBlogRefreshBusy] = useState(false);
   const [blogRefreshCooldownSec, setBlogRefreshCooldownSec] = useState(0);
   const blogRefreshCooldownUntilRef = useRef(0);
+  const [fullRedeployBusy, setFullRedeployBusy] = useState(false);
+  const [fullRedeployCooldownSec, setFullRedeployCooldownSec] = useState(0);
+  const fullRedeployCooldownUntilRef = useRef(0);
+  const [fullRedeployConfigured, setFullRedeployConfigured] = useState(true);
   const adminToastTimerRef = useRef(null);
   const [adminToast, setAdminToast] = useState({ message: '', visible: false, closing: false });
   const [smartParseText, setSmartParseText] = useState('');
@@ -2725,11 +2729,34 @@ const [mounted, setMounted] = useState(false);
     const tick = () => {
       const left = Math.ceil((blogRefreshCooldownUntilRef.current - Date.now()) / 1000);
       setBlogRefreshCooldownSec(left > 0 ? left : 0);
+      const fullLeft = Math.ceil(
+        (fullRedeployCooldownUntilRef.current - Date.now()) / 1000
+      );
+      setFullRedeployCooldownSec(fullLeft > 0 ? fullLeft : 0);
     };
     tick();
     const id = setInterval(tick, 500);
     return () => clearInterval(id);
   }, []);
+  const fetchFullRedeployStatus = async () => {
+    try {
+      const res = await fetch('/api/admin/full-redeploy');
+      const data = await res.json();
+      if (!res.ok || !data.success) return;
+      setFullRedeployConfigured(Boolean(data.configured));
+      if (data.retryAfterSec > 0) {
+        fullRedeployCooldownUntilRef.current =
+          Date.now() + data.retryAfterSec * 1000;
+        setFullRedeployCooldownSec(data.retryAfterSec);
+      }
+    } catch (e) {
+      console.warn('读取全量刷新状态失败', e);
+    }
+  };
+  useEffect(() => {
+    if (!mounted) return;
+    fetchFullRedeployStatus();
+  }, [mounted]);
   useEffect(() => { if (mounted) fetchPosts(); }, [mounted]);
   useEffect(() => {
     if (mounted && view === 'list') loadGalleryStorage();
@@ -3436,6 +3463,39 @@ const [mounted, setMounted] = useState(false);
       .finally(() => { setBlogRefreshBusy(false); });
   };
 
+  const handleFullRedeploy = async () => {
+    if (isThemeLoading || fullRedeployBusy || fullRedeployCooldownSec > 0) return;
+    if (!fullRedeployConfigured) {
+      showAdminToast('全量刷新未配置，请联系管理');
+      return;
+    }
+    setFullRedeployBusy(true);
+    try {
+      const res = await fetch('/api/admin/full-redeploy', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || '触发失败');
+      }
+      if (data.retryAfterSec > 0) {
+        fullRedeployCooldownUntilRef.current =
+          Date.now() + data.retryAfterSec * 1000;
+        setFullRedeployCooldownSec(data.retryAfterSec);
+      } else {
+        fullRedeployCooldownUntilRef.current =
+          Date.now() + 24 * 60 * 60 * 1000;
+        setFullRedeployCooldownSec(24 * 60 * 60);
+      }
+      showAdminToast(
+        data.message ||
+          '全量更新已触发，请等待3分钟后刷新BLOG，如存在问题请联系管理'
+      );
+    } catch (e) {
+      showAdminToast(e?.message || '全量刷新失败');
+    } finally {
+      setFullRedeployBusy(false);
+    }
+  };
+
   const deleteTagOption = (e, tagToDelete) => {
     e.stopPropagation();
     const currentTags = form.tags ? form.tags.split(',').filter(t => t.trim()) : [];
@@ -3761,7 +3821,50 @@ const [mounted, setMounted] = useState(false);
              </div>
            </div>
            
-           <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+           <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexShrink: 0 }}>
+             <button
+               type="button"
+               onClick={handleFullRedeploy}
+               disabled={
+                 isThemeLoading ||
+                 fullRedeployBusy ||
+                 fullRedeployCooldownSec > 0 ||
+                 !fullRedeployConfigured
+               }
+               style={{
+                 background: '#424242',
+                 border: '1px solid #666',
+                 padding: '10px 16px',
+                 borderRadius: '8px',
+                 color: fullRedeployCooldownSec > 0 ? '#888' : '#ddd',
+                 cursor:
+                   isThemeLoading ||
+                   fullRedeployBusy ||
+                   fullRedeployCooldownSec > 0 ||
+                   !fullRedeployConfigured
+                     ? 'not-allowed'
+                     : 'pointer',
+                 opacity:
+                   isThemeLoading ||
+                   fullRedeployBusy ||
+                   fullRedeployCooldownSec > 0 ||
+                   !fullRedeployConfigured
+                     ? 0.45
+                     : 1,
+                 fontSize: '13px',
+                 fontWeight: 'bold',
+                 whiteSpace: 'nowrap',
+               }}
+               title={
+                 !fullRedeployConfigured
+                   ? '未配置 Vercel 部署钩子，请联系管理'
+                   : fullRedeployCooldownSec > 0
+                     ? `全量刷新冷却中（约 ${Math.ceil(fullRedeployCooldownSec / 3600)} 小时后可再用）`
+                     : '触发 Vercel 全量重部署（24 小时内仅一次）'
+               }
+             >
+               {fullRedeployBusy ? '触发中…' : '全量刷新'}
+             </button>
              <button
                type="button"
                onClick={handleManualDeploy}
@@ -3769,16 +3872,16 @@ const [mounted, setMounted] = useState(false);
                style={{
                  background: '#424242',
                  border: '1px solid greenyellow',
-                 padding: '10px 14px',
+                 padding: '10px 12px',
                  borderRadius: '8px',
                  color: 'greenyellow',
                  cursor: (isThemeLoading || blogRefreshBusy || blogRefreshCooldownSec > 0) ? 'not-allowed' : 'pointer',
                  opacity: (isThemeLoading || blogRefreshBusy || blogRefreshCooldownSec > 0) ? 0.45 : 1,
                  display: 'flex',
                  alignItems: 'center',
-                 gap: '8px',
-                 fontSize: '13px',
-                 fontWeight: 'bold',
+                 justifyContent: 'center',
+                 minWidth: '40px',
+                 minHeight: '40px',
                }}
                title={
                  blogRefreshCooldownSec > 0
@@ -3787,20 +3890,9 @@ const [mounted, setMounted] = useState(false);
                }
              >
                {blogRefreshBusy ? (
-                 <>
-                   <span style={blogRefreshSpinStyle} aria-hidden />
-                   刷新中…
-                 </>
-               ) : blogRefreshCooldownSec > 0 ? (
-                 <>
-                   <Icons.Refresh />
-                   刷新BLOG ({blogRefreshCooldownSec}s)
-                 </>
+                 <span style={blogRefreshSpinStyle} aria-hidden />
                ) : (
-                 <>
-                   <Icons.Refresh />
-                   刷新BLOG
-                 </>
+                 <Icons.Refresh />
                )}
              </button>
              {view === 'list' ? <AnimatedBtn text="发布新内容" onClick={handleCreate} /> : <AnimatedBtn text="返回列表" onClick={leaveEditView} />}
