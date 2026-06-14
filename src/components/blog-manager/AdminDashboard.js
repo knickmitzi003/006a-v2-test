@@ -1902,7 +1902,7 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
               <textarea
                 id={'editfield-' + b.id}
                 className="glow-input"
-                placeholder="输入正文；拖入或粘贴图片将自动在下方生成图片块，不影响本文。给部分文字加超链：选中文字后点上方「🔗 链接」，或直接输入 [文字](https://...)"
+                placeholder="在此处输入正文，如需超链文字请选中文字后点击上方“链接”按钮"
                 value={b.content}
                 onChange={e=>updateBlock(b.id, e.target.value)}
                 onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
