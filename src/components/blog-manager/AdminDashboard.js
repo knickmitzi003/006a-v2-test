@@ -1407,6 +1407,8 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
   const [dropPosition, setDropPosition] = useState(null);
   const minimapDragMovedRef = useRef(false);
   const coverImageBlockId = findCoverImageBlock(blocks)?.id ?? null;
+  // 行内超链接弹窗：{ blockId, start, end, label, url }，为 null 时关闭
+  const [linkModal, setLinkModal] = useState(null);
 
   const scrollToBlock = (id, delay = 100) => {
     setTimeout(() => {
@@ -1431,6 +1433,7 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
   const updateBlock = (id, val, key='content') => { setBlocks(blocks.map(b => b.id === id ? { ...b, [key]: val } : b)); };
 
   // 给当前块（h1/正文/引用/注释）选中的文字插入行内超链接，写成 [文字](url)
+  // 点击「🔗 链接」时先捕获当前选区，再弹出页内弹窗（而非浏览器 prompt）
   const insertLinkForBlock = (b) => {
     const el = typeof document !== 'undefined' ? document.getElementById('editfield-' + b.id) : null;
     const content = b.content || '';
@@ -1440,22 +1443,26 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
       start = el.selectionStart;
       end = el.selectionEnd;
     }
-    let label = content.slice(start, end);
-    if (!label) {
-      label = window.prompt('链接显示文字：', '');
-      if (label === null) return;
-      label = label.trim();
-      if (!label) { alert('请输入要显示的文字'); return; }
-    }
-    let url = window.prompt('链接地址（https://...）：', 'https://');
-    if (url === null) return;
-    url = (url || '').trim();
-    if (!url) return;
+    const selected = content.slice(start, end);
+    setLinkModal({ blockId: b.id, start, end, label: selected || '', url: 'https://' });
+  };
+
+  // 弹窗「确认」：把 [文字](url) 写回对应块，并恢复光标位置
+  const confirmLinkModal = () => {
+    if (!linkModal) return;
+    const { blockId, start, end } = linkModal;
+    const label = (linkModal.label || '').trim();
+    let url = (linkModal.url || '').trim();
+    if (!label || !url || url === 'https://') return;
+    const block = blocks.find(x => x.id === blockId);
+    if (!block) { setLinkModal(null); return; }
+    const content = block.content || '';
     const snippet = `[${label}](${url})`;
     const next = content.slice(0, start) + snippet + content.slice(end);
-    updateBlock(b.id, next);
+    updateBlock(blockId, next);
+    setLinkModal(null);
     setTimeout(() => {
-      const el2 = document.getElementById('editfield-' + b.id);
+      const el2 = document.getElementById('editfield-' + blockId);
       if (el2) {
         const pos = start + snippet.length;
         el2.focus();
@@ -1739,8 +1746,49 @@ const BlockBuilder = ({ blocks, setBlocks }) => {
       if (type === 'link') return '🔗 超链文字';
       return '📄 内容块';
   };
+  const linkModalValid = !!(linkModal && (linkModal.label || '').trim() && (linkModal.url || '').trim() && (linkModal.url || '').trim() !== 'https://');
   return (
     <div style={{marginTop:'30px'}}>
+      {linkModal && (
+        <div
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setLinkModal(null); }}
+          style={{ position:'fixed', inset:0, zIndex:10000, background:'rgba(0,0,0,0.55)', backdropFilter:'blur(2px)', display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' }}
+        >
+          <div style={{ width:'100%', maxWidth:'420px', background:'#1f1f24', border:'1px solid #3a3a42', borderRadius:'14px', boxShadow:'0 12px 40px rgba(0,0,0,0.5)', padding:'22px' }}>
+            <div style={{ fontSize:'16px', fontWeight:'bold', color:'#fff', marginBottom:'4px', display:'flex', alignItems:'center', gap:'6px' }}>🔗 添加超链接</div>
+            <div style={{ fontSize:'12px', color:'#999', marginBottom:'18px' }}>将选中文字转为超链接；未选中时可手动填写显示文字。</div>
+            <label style={{ display:'block', fontSize:'12px', color:'#bbb', marginBottom:'6px' }}>显示文字</label>
+            <input
+              className="glow-input"
+              autoFocus
+              value={linkModal.label}
+              onChange={(e) => setLinkModal({ ...linkModal, label: e.target.value })}
+              placeholder="例如：贩售机"
+              style={{ marginBottom:'14px', fontSize:'14px' }}
+            />
+            <label style={{ display:'block', fontSize:'12px', color:'#bbb', marginBottom:'6px' }}>链接地址</label>
+            <input
+              className="glow-input"
+              value={linkModal.url}
+              onChange={(e) => setLinkModal({ ...linkModal, url: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter' && linkModalValid) confirmLinkModal(); if (e.key === 'Escape') setLinkModal(null); }}
+              placeholder="https://..."
+              style={{ marginBottom:'22px', fontSize:'14px', color:'#7cb3ff' }}
+            />
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:'10px' }}>
+              <button
+                onClick={() => setLinkModal(null)}
+                style={{ height:'36px', padding:'0 16px', borderRadius:'8px', cursor:'pointer', border:'1px solid #444', background:'transparent', color:'#ccc', fontSize:'13px' }}
+              >取消</button>
+              <button
+                onClick={confirmLinkModal}
+                disabled={!linkModalValid}
+                style={{ height:'36px', padding:'0 18px', borderRadius:'8px', cursor: linkModalValid ? 'pointer' : 'not-allowed', border:'none', background: linkModalValid ? '#2f7cf6' : '#33384a', color: linkModalValid ? '#fff' : '#7a7f8c', fontSize:'13px', fontWeight:'bold' }}
+              >确认</button>
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{display:'flex', gap:'15px', marginBottom:'25px', justifyContent:'center', flexWrap:'wrap'}}>
           <div className="neo-btn" onClick={()=>addBlock('h1')}>正文标题</div>
           <div className="neo-btn" onClick={()=>addBlock('text')}>📝 内容块</div>
