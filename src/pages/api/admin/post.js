@@ -1,8 +1,8 @@
-import { Client } from '@notionhq/client';
+import { Client, isFullPage } from '@notionhq/client';
 import { NotionToMarkdown } from 'notion-to-md';
 import { readPinnedFromNotionProperties } from '@/src/lib/blog/pinnedPosts';
 import { syncSiteThemeFromAdmin } from '@/src/lib/blog/siteTheme';
-import { normalizeMediaUrl, readNotionCoverUrl, findNotionPropertyKey, DOWNLOAD_SIZE_PROPERTY_NAMES, DOWNLOAD_COUNT_PROPERTY_NAMES, readDownloadSizeFromPageProperties, readDownloadCountFromPageProperties } from '@/src/lib/notion/readProperty';
+import { normalizeMediaUrl, readNotionCoverUrl, findNotionPropertyKey, readCoverFromPageProperties, readPageCoverUrl, DOWNLOAD_SIZE_PROPERTY_NAMES, DOWNLOAD_COUNT_PROPERTY_NAMES, readDownloadSizeFromPageProperties, readDownloadCountFromPageProperties } from '@/src/lib/notion/readProperty';
 
 const notion = new Client({
   auth: process.env.NOTION_KEY || process.env.NOTION_TOKEN,
@@ -381,24 +381,39 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const page = await withRetry(() => notion.pages.retrieve({ page_id: queryId }));
-      const mdblocks = await withRetry(() => n2m.pageToMarkdown(queryId));
+      if (!isFullPage(page)) {
+        return res.status(404).json({ success: false, error: '页面不存在或无权访问' });
+      }
+      let mdblocks = [];
+      let cleanContent = '';
+      try {
+        mdblocks = await withRetry(() => n2m.pageToMarkdown(queryId));
+        mdblocks.forEach(b => {
+          if (b.type === 'callout' && b.parent && b.parent.includes('LOCK:')) {
+            const pwdMatch = b.parent.match(/LOCK:(.*?)(\n|$)/);
+            const pwd = pwdMatch ? pwdMatch[1].trim() : '';
+            const parts = b.parent.split('---');
+            let body = parts.length > 1 ? parts.slice(1).join('---') : parts[0].replace(/LOCK:.*\n?/, '');
+            body = body.replace(/^>[ \t]*/gm, '').trim(); 
+            b.parent = `:::lock ${pwd}\n\n${body}\n\n:::`; 
+          }
+        });
+        cleanContent = n2m.toMarkdownString(mdblocks).parent.trim();
+      } catch (mdErr) {
+        console.warn('pageToMarkdown failed, fallback empty content:', mdErr);
+        cleanContent = '';
+      }
       const p = page.properties;
-      mdblocks.forEach(b => {
-        if (b.type === 'callout' && b.parent.includes('LOCK:')) {
-          const pwdMatch = b.parent.match(/LOCK:(.*?)(\n|$)/);
-          const pwd = pwdMatch ? pwdMatch[1].trim() : '';
-          const parts = b.parent.split('---');
-          let body = parts.length > 1 ? parts.slice(1).join('---') : parts[0].replace(/LOCK:.*\n?/, '');
-          body = body.replace(/^>[ \t]*/gm, '').trim(); 
-          b.parent = `:::lock ${pwd}\n\n${body}\n\n:::`; 
-        }
-      });
-      const cleanContent = n2m.toMarkdownString(mdblocks).parent.trim();
       let rawBlocks = [];
       try { const blocksRes = await withRetry(() => notion.blocks.children.list({ block_id: queryId })); rawBlocks = blocksRes.results; } catch (e) {}
       let editorBlocks = [];
       try { editorBlocks = await notionToEditorBlocks(rawBlocks); } catch (e) { editorBlocks = []; }
-      return res.status(200).json({ success: true, post: { id: page.id, title: p.title?.title?.[0]?.plain_text || p.Page?.title?.[0]?.plain_text || '无标题', slug: p.slug?.rich_text?.[0]?.plain_text || '', excerpt: p.excerpt?.rich_text?.[0]?.plain_text || '', category: p.category?.select?.name || '', tags: (p.tags?.multi_select || []).map(t => t.name).join(','), status: p.status?.status?.name || p.status?.select?.name || 'Published', type: p.type?.select?.name || 'Post', date: p.date?.date?.start || '', cover: readNotionCoverUrl(p.cover) || '', pinned: readPinnedFromNotionProperties(p), download: readDownloadProperty(p.download), download_size: readDownloadSizeFromPageProperties(p), download_count: readDownloadCountFromPageProperties(p), content: cleanContent, rawBlocks: rawBlocks, editorBlocks: editorBlocks } });
+      const coverUrl =
+        readCoverFromPageProperties(p) ||
+        readNotionCoverUrl(p.cover) ||
+        readPageCoverUrl(page.cover) ||
+        '';
+      return res.status(200).json({ success: true, post: { id: page.id, title: p.title?.title?.[0]?.plain_text || p.Page?.title?.[0]?.plain_text || '无标题', slug: p.slug?.rich_text?.[0]?.plain_text || '', excerpt: p.excerpt?.rich_text?.[0]?.plain_text || '', category: p.category?.select?.name || '', tags: (p.tags?.multi_select || []).map(t => t.name).join(','), status: p.status?.status?.name || p.status?.select?.name || 'Published', type: p.type?.select?.name || 'Post', date: p.date?.date?.start || '', cover: coverUrl, pinned: readPinnedFromNotionProperties(p), download: readDownloadProperty(p.download), download_size: readDownloadSizeFromPageProperties(p), download_count: readDownloadCountFromPageProperties(p), content: cleanContent, rawBlocks: rawBlocks, editorBlocks: editorBlocks } });
     }
 
     if (req.method === 'PATCH') {

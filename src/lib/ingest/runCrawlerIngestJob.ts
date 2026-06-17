@@ -2,6 +2,7 @@ import type { NextApiResponse } from 'next'
 import {
   clearContentBuildCaches,
   collectPostRevalidatePaths,
+  collectShellRevalidatePaths,
   revalidateMany,
   resolveRevalidateOrigin,
 } from '@/src/lib/blog/contentRevalidation'
@@ -138,6 +139,14 @@ export async function runCrawlerIngestJob(
     else skipped += 1
   }
 
+  if (succeeded > 0) {
+    try {
+      await revalidateShellAfterBatch(res)
+    } catch (shellErr) {
+      console.warn('爬虫入库后壳层列表刷新失败（文章已写入）', shellErr)
+    }
+  }
+
   return {
     processed: items.length,
     succeeded,
@@ -145,4 +154,15 @@ export async function runCrawlerIngestJob(
     skipped,
     items,
   }
+}
+
+async function revalidateShellAfterBatch(res: NextApiResponse) {
+  clearContentBuildCaches()
+  const shellPaths = collectShellRevalidatePaths()
+  await revalidateMany(res, shellPaths, {
+    clearCaches: false,
+    freshTheme: true,
+    contentChange: true,
+    origin: resolveRevalidateOrigin(),
+  })
 }

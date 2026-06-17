@@ -4,6 +4,7 @@ import { syncGalleryImages } from '@/src/lib/gallery/galleryDb'
 import {
   findNotionPropertyKey,
   normalizeMediaUrl,
+  COVER_PROPERTY_NAMES,
   DOWNLOAD_COUNT_PROPERTY_NAMES,
   DOWNLOAD_SIZE_PROPERTY_NAMES,
 } from '@/src/lib/notion/readProperty'
@@ -110,6 +111,36 @@ async function loadTargetProps(pageId?: string | null): Promise<NotionPropsSchem
   return db.properties as NotionPropsSchema
 }
 
+function buildCoverProperty(
+  coverUrl: string,
+  targetProps: NotionPropsSchema
+): Record<string, unknown> {
+  const coverKey =
+    findNotionPropertyKey(targetProps as never, COVER_PROPERTY_NAMES) || 'cover'
+  const propSchema = targetProps[coverKey]
+  const normalized = normalizeMediaUrl(coverUrl)
+  if (!normalized) {
+    if (propSchema?.type === 'files') {
+      return { [coverKey]: { files: [] } }
+    }
+    return { [coverKey]: { url: null } }
+  }
+  if (propSchema?.type === 'files') {
+    return {
+      [coverKey]: {
+        files: [
+          {
+            type: 'external',
+            name: 'cover',
+            external: { url: normalized },
+          },
+        ],
+      },
+    }
+  }
+  return { [coverKey]: { url: normalized } }
+}
+
 function buildNotionProperties(
   row: CrawlerQueueRow,
   coverUrl: string,
@@ -154,10 +185,7 @@ function buildNotionProperties(
   props.type = { select: { name: 'Post' } }
   props.date = { date: { start: date } }
 
-  const normalizedCover = normalizeMediaUrl(coverUrl)
-  props.cover = normalizedCover
-    ? { url: normalizedCover }
-    : { url: null }
+  Object.assign(props, buildCoverProperty(coverUrl, targetProps))
 
   props.download = buildDownloadProperty(row.download || '', targetProps.download)
 

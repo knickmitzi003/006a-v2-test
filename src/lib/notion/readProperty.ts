@@ -85,7 +85,7 @@ export function readPageCoverUrl(
   return null
 }
 
-const COVER_PROPERTY_NAMES = ['cover', 'Cover', 'COVER', '封面']
+export const COVER_PROPERTY_NAMES = ['cover', 'Cover', 'COVER', '封面']
 const COVER_DARK_PROPERTY_NAMES = ['cover_dark', 'Cover Dark', 'coverDark', 'Cover_Dark']
 
 export const DOWNLOAD_SIZE_PROPERTY_NAMES = [

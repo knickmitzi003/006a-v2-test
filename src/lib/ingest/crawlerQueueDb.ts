@@ -117,6 +117,33 @@ export async function getCrawlerQueueSummary(): Promise<{
   return counts
 }
 
+export async function listRecentCrawlerQueueRows(
+  limit: number
+): Promise<CrawlerQueueRow[]> {
+  const sb = getSupabaseAdmin()
+  const siteId = getBlogSiteIdOrNull()
+  if (!sb || !siteId) return []
+
+  const safeLimit = Math.min(Math.max(limit, 1), 100)
+  const { data, error } = await sb
+    .from('crawler_ingest_queue')
+    .select('*')
+    .eq('site_id', siteId)
+    .order('updated_at', { ascending: false })
+    .limit(safeLimit)
+
+  if (error) throw error
+  return (data || []).map((row) => mapRow(row as Record<string, unknown>))
+}
+
+export async function retryCrawlerQueueRow(id: string): Promise<void> {
+  await markCrawlerQueueRow(id, {
+    status: 'pending',
+    error_message: null,
+    processed_at: null,
+  })
+}
+
 export async function markCrawlerQueueRow(
   id: string,
   patch: Partial<{
