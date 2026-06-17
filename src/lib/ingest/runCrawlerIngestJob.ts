@@ -70,7 +70,8 @@ async function revalidatePost(
 
 async function processOneRow(
   row: CrawlerQueueRow,
-  res: NextApiResponse
+  res: NextApiResponse,
+  occupiedSlugs: Set<string>
 ): Promise<CrawlerIngestRunItem> {
   const base = {
     id: row.id,
@@ -102,6 +103,7 @@ async function processOneRow(
 
     return {
       ...base,
+      slug: result.slug,
       status: 'done',
       action: result.action,
       notionPageId: result.notionPageId,
@@ -135,7 +137,7 @@ export async function runCrawlerIngestJob(
   let skipped = 0
 
   for (const row of pending) {
-    const item = await processOneRow(row, res)
+    const item = await processOneRow(row, res, occupiedSlugs)
     items.push(item)
     if (item.status === 'done') succeeded += 1
     else if (item.status === 'failed') failed += 1
