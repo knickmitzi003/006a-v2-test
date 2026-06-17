@@ -2,7 +2,7 @@ import { getBlogSiteIdOrNull } from '@/src/lib/gallery/blogSite'
 import { getSupabaseAdmin } from '@/src/lib/supabase/admin'
 
 const TABLE = 'blog_site_settings'
-const COOLDOWN_MS = 24 * 60 * 60 * 1000
+const COOLDOWN_MS = 12 * 60 * 60 * 1000
 
 /** 进程内兜底（无 Supabase 时尽力限制） */
 const memoryLastRedeploy = new Map<string, number>()
@@ -107,7 +107,7 @@ export async function triggerFullRedeploy(): Promise<void> {
   const status = await getFullRedeployStatus()
   if (!status.available) {
     const hours = Math.ceil(status.retryAfterSec / 3600)
-    throw new Error(`全量刷新 24 小时内仅可使用一次，请约 ${hours} 小时后再试`)
+    throw new Error(`全量更新 12 小时内仅可使用一次，请约 ${hours} 小时后再试`)
   }
 
   const res = await fetch(hookUrl, { method: 'POST' })

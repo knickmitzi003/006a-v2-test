@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    const isCooldown = /24 小时/.test(message)
+    const isCooldown = /小时内仅可使用一次/.test(message)
     return res.status(isCooldown ? 429 : 500).json({
       success: false,
       error: message,

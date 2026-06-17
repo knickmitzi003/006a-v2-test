@@ -106,6 +106,8 @@ function resolveSaveRevalidateScope(type, slug) {
 const REVALIDATE_BATCH_SIZE = 12;
 /** 手动「刷新BLOG」完成后冷却（防连点 / 狂点） */
 const BLOG_SHELL_REFRESH_COOLDOWN_MS = 60_000;
+/** 全量更新冷却（与 fullRedeploy.ts 一致） */
+const FULL_REDEPLOY_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 /** 发布队列：各阶段「无进度心跳」超过此时长才视为卡住（非总时长） */
 const PUBLISH_QUEUE_IDLE_STALL_MS = {
   gallery: 180_000,
@@ -552,6 +554,18 @@ const GlobalStyle = () => (
     .category-picker-dropdown::-webkit-scrollbar-track { background: #2a2a2e; border-radius: 4px; }
     .category-picker-dropdown::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
     .category-picker-dropdown::-webkit-scrollbar-thumb:hover { background: #777; }
+    .header-actions-menu-wrap { position: relative; flex-shrink: 0; }
+    .header-actions-trigger { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 40px; min-height: 40px; padding: 10px 12px; border-radius: 8px; background: #424242; border: 1px solid greenyellow; color: greenyellow; cursor: pointer; transition: background 0.15s ease, box-shadow 0.15s ease; }
+    .header-actions-trigger:hover:not(:disabled) { background: #4a4a4a; box-shadow: 0 0 12px rgba(173, 255, 47, 0.2); }
+    .header-actions-trigger.is-open { background: #3a3a3e; box-shadow: 0 0 0 2px rgba(173, 255, 47, 0.35); }
+    .header-actions-trigger:disabled { opacity: 0.45; cursor: not-allowed; }
+    .header-actions-trigger__chevron { display: flex; opacity: 0.85; transition: transform 0.2s ease; }
+    .header-actions-trigger.is-open .header-actions-trigger__chevron { transform: rotate(180deg); }
+    .header-actions-menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 220px; padding: 6px; border-radius: 10px; background: #2a2a2e; border: 1px solid #555; box-shadow: 0 12px 32px rgba(0,0,0,0.5); z-index: 200; }
+    .header-actions-menu-item { display: block; width: 100%; padding: 10px 12px; border: none; border-radius: 8px; background: transparent; color: #eee; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; transition: background 0.15s ease; }
+    .header-actions-menu-item:hover:not(:disabled) { background: #3a3a3e; }
+    .header-actions-menu-item:disabled { opacity: 0.45; cursor: not-allowed; }
+    .header-actions-menu-item__hint { display: block; margin-top: 4px; font-size: 11px; font-weight: 400; line-height: 1.35; color: #888; }
     .cover-modal-backdrop { position: fixed; inset: 0; z-index: 10001; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,0); backdrop-filter: blur(0px); pointer-events: none; transition: background 0.28s ease, backdrop-filter 0.28s ease; }
     .cover-modal-backdrop.is-visible { background: rgba(0,0,0,0.72); backdrop-filter: blur(6px); pointer-events: auto; }
     .cover-modal-backdrop.is-closing { background: rgba(0,0,0,0); backdrop-filter: blur(0px); pointer-events: none; }
@@ -1525,7 +1539,145 @@ const CrawlerIngestModal = ({
   );
 };
 
-/** 全量刷新确认弹窗 */
+/** 顶栏：绿色刷新按钮展开的操作菜单 */
+const AdminHeaderActionsMenu = ({
+  open,
+  onToggle,
+  onClose,
+  isThemeLoading,
+  blogRefreshBusy,
+  blogRefreshCooldownSec,
+  onShellRefresh,
+  fullRedeployBusy,
+  fullRedeployCooldownSec,
+  fullRedeployConfigured,
+  onFullRedeploy,
+  crawlerIngestBusy,
+  crawlerIngestConfigured,
+  crawlerIngestSummary,
+  onCrawlerIngest,
+  onOpenIngestList,
+}) => {
+  const shellRefreshDisabled =
+    isThemeLoading || blogRefreshBusy || blogRefreshCooldownSec > 0;
+  const fullRedeployDisabled =
+    isThemeLoading ||
+    fullRedeployBusy ||
+    fullRedeployCooldownSec > 0 ||
+    !fullRedeployConfigured;
+  const crawlerIngestDisabled =
+    isThemeLoading || crawlerIngestBusy || !crawlerIngestConfigured;
+  const ingestListDisabled = isThemeLoading || !crawlerIngestConfigured;
+
+  const runAndClose = (fn) => {
+    onClose();
+    fn();
+  };
+
+  return (
+    <div className="header-actions-menu-wrap">
+      <button
+        type="button"
+        className={`header-actions-trigger${open ? ' is-open' : ''}`}
+        onClick={onToggle}
+        disabled={isThemeLoading}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        title="更多操作：刷新前台、全量更新、爬虫入库等"
+      >
+        {blogRefreshBusy ? (
+          <span style={blogRefreshSpinStyle} aria-hidden />
+        ) : (
+          <Icons.Refresh />
+        )}
+        <span className="header-actions-trigger__chevron" aria-hidden>
+          <Icons.ChevronDown />
+        </span>
+      </button>
+      {open ? (
+        <div className="header-actions-menu" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="header-actions-menu-item"
+            disabled={shellRefreshDisabled}
+            onClick={() => runAndClose(onShellRefresh)}
+            title="刷新首页、自定义页面、归档与分类/标签列表（不重建全部文章内页）"
+          >
+            刷新前台
+            {blogRefreshCooldownSec > 0 ? (
+              <span className="header-actions-menu-item__hint">
+                冷却中（{blogRefreshCooldownSec}s）
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="header-actions-menu-item"
+            disabled={fullRedeployDisabled}
+            onClick={() => runAndClose(onFullRedeploy)}
+            title={
+              !fullRedeployConfigured
+                ? '未配置 Vercel 部署钩子，请联系管理'
+                : fullRedeployCooldownSec > 0
+                  ? '12h 内已执行全量更新，请稍后再试'
+                  : '触发 Vercel 全量重部署（12 小时内仅一次）'
+            }
+          >
+            {fullRedeployBusy ? '全量更新中…' : '全量更新'}
+            {fullRedeployCooldownSec > 0 ? (
+              <span className="header-actions-menu-item__hint">
+                12h 内已执行，请等待后再试
+              </span>
+            ) : null}
+            {!fullRedeployConfigured && fullRedeployCooldownSec <= 0 ? (
+              <span className="header-actions-menu-item__hint">未配置部署钩子</span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="header-actions-menu-item"
+            disabled={crawlerIngestDisabled}
+            onClick={() => runAndClose(onCrawlerIngest)}
+            title={
+              !crawlerIngestConfigured
+                ? '未配置 Supabase 图库租户，请联系管理'
+                : '立即消费 Supabase 爬虫队列：写入 Notion + 图库并刷新相关前台页面'
+            }
+          >
+            {crawlerIngestBusy ? '入库中…' : '爬虫入库'}
+            {crawlerIngestConfigured && crawlerIngestSummary ? (
+              <span className="header-actions-menu-item__hint">
+                待入库 {crawlerIngestSummary.pending ?? 0} · 已完成{' '}
+                {crawlerIngestSummary.done ?? 0}
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="header-actions-menu-item"
+            disabled={ingestListDisabled}
+            onClick={() => runAndClose(onOpenIngestList)}
+            title="查看爬虫入库队列与任务进度"
+          >
+            入库列表
+            {crawlerIngestConfigured && crawlerIngestSummary ? (
+              <span className="header-actions-menu-item__hint">
+                失败 {crawlerIngestSummary.failed ?? 0} · 处理中{' '}
+                {crawlerIngestSummary.processing ?? 0}
+              </span>
+            ) : null}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+/** 全量更新确认弹窗 */
 const FullRedeployConfirmModal = ({ open, closing, busy, onConfirm, onCancel }) => {
   const [visible, setVisible] = useState(false);
 
@@ -1558,7 +1710,7 @@ const FullRedeployConfirmModal = ({ open, closing, busy, onConfirm, onCancel }) 
         <div className="cover-modal-icon" aria-hidden>🔄</div>
         <h3 id="full-redeploy-modal-title" className="cover-modal-title">确认全量更新</h3>
         <p className="cover-modal-desc">
-          是否确定执行全量更新，24h仅支持执行1次
+          是否确定执行全量更新，12h 内仅支持执行 1 次
         </p>
         <div className="cover-modal-actions">
           <button type="button" className="cover-modal-btn cover-modal-btn-secondary" onClick={onCancel} disabled={busy}>
@@ -2956,6 +3108,8 @@ const [mounted, setMounted] = useState(false);
   const [crawlerIngestModalOpen, setCrawlerIngestModalOpen] = useState(false);
   const [crawlerIngestModalClosing, setCrawlerIngestModalClosing] = useState(false);
   const crawlerIngestModalTimerRef = useRef(null);
+  const [headerActionsMenuOpen, setHeaderActionsMenuOpen] = useState(false);
+  const headerActionsMenuRef = useRef(null);
   const adminToastTimerRef = useRef(null);
   const [adminToast, setAdminToast] = useState({ message: '', visible: false, closing: false });
   const [smartParseText, setSmartParseText] = useState('');
@@ -3298,6 +3452,19 @@ const [mounted, setMounted] = useState(false);
     const id = setInterval(tick, 500);
     return () => clearInterval(id);
   }, []);
+  useEffect(() => {
+    if (!headerActionsMenuOpen) return;
+    const onPointerDown = (e) => {
+      if (
+        headerActionsMenuRef.current &&
+        !headerActionsMenuRef.current.contains(e.target)
+      ) {
+        setHeaderActionsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [headerActionsMenuOpen]);
   const fetchFullRedeployStatus = async () => {
     try {
       const res = await fetch('/api/admin/full-redeploy');
@@ -3310,7 +3477,7 @@ const [mounted, setMounted] = useState(false);
         setFullRedeployCooldownSec(data.retryAfterSec);
       }
     } catch (e) {
-      console.warn('读取全量刷新状态失败', e);
+      console.warn('读取全量更新状态失败', e);
     }
   };
 
@@ -4146,8 +4313,8 @@ const [mounted, setMounted] = useState(false);
         setFullRedeployCooldownSec(data.retryAfterSec);
       } else {
         fullRedeployCooldownUntilRef.current =
-          Date.now() + 24 * 60 * 60 * 1000;
-        setFullRedeployCooldownSec(24 * 60 * 60);
+          Date.now() + FULL_REDEPLOY_COOLDOWN_MS;
+        setFullRedeployCooldownSec(Math.ceil(FULL_REDEPLOY_COOLDOWN_MS / 1000));
       }
       closeFullRedeployConfirmModal();
       showAdminToast(
@@ -4155,7 +4322,7 @@ const [mounted, setMounted] = useState(false);
           '全量更新已触发，请等待3分钟后刷新BLOG，如存在问题请联系管理'
       );
     } catch (e) {
-      showAdminToast(e?.message || '全量刷新失败');
+      showAdminToast(e?.message || '全量更新失败');
     } finally {
       setFullRedeployBusy(false);
     }
@@ -4169,7 +4336,7 @@ const [mounted, setMounted] = useState(false);
   const openFullRedeployConfirm = () => {
     if (isThemeLoading || fullRedeployBusy || fullRedeployCooldownSec > 0) return;
     if (!fullRedeployConfigured) {
-      showAdminToast('全量刷新未配置，请联系管理');
+      showAdminToast('全量更新未配置，请联系管理');
       return;
     }
     if (fullRedeployConfirmTimerRef.current) clearTimeout(fullRedeployConfirmTimerRef.current);
@@ -4522,148 +4689,26 @@ const [mounted, setMounted] = useState(false);
            </div>
            
            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexShrink: 0 }}>
-             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-               <button
-                 type="button"
-                 onClick={handleCrawlerIngestRun}
-                 disabled={
-                   isThemeLoading ||
-                   crawlerIngestBusy ||
-                   !crawlerIngestConfigured
-                 }
-                 style={{
-                   background: '#1a4d5c',
-                   border: '1px solid #3db8d9',
-                   padding: '10px 16px',
-                   borderRadius: '8px',
-                   color: '#7ee8fc',
-                   cursor:
-                     isThemeLoading ||
-                     crawlerIngestBusy ||
-                     !crawlerIngestConfigured
-                       ? 'not-allowed'
-                       : 'pointer',
-                   opacity:
-                     isThemeLoading ||
-                     crawlerIngestBusy ||
-                     !crawlerIngestConfigured
-                       ? 0.45
-                       : 1,
-                   fontSize: '13px',
-                   fontWeight: 'bold',
-                   whiteSpace: 'nowrap',
-                   boxShadow: '0 2px 8px rgba(61,184,217,0.25)',
-                 }}
-                 title={
-                   !crawlerIngestConfigured
-                     ? '未配置 Supabase 图库租户，请联系管理'
-                     : '立即消费 Supabase 爬虫队列：写入 Notion + 图库并刷新相关前台页面'
-                 }
-               >
-                 {crawlerIngestBusy ? '入库中…' : '爬虫入库'}
-               </button>
-               {crawlerIngestConfigured && crawlerIngestSummary && (
-                 <button
-                   type="button"
-                   onClick={openCrawlerIngestModal}
-                   style={{
-                     fontSize: '11px',
-                     color: '#888',
-                     lineHeight: 1.3,
-                     whiteSpace: 'nowrap',
-                     background: 'none',
-                     border: 'none',
-                     cursor: 'pointer',
-                     padding: 0,
-                     textDecoration: 'underline',
-                   }}
-                   title="查看爬虫入库队列与任务进度"
-                 >
-                   待入库 {crawlerIngestSummary.pending ?? 0} · 已完成 {crawlerIngestSummary.done ?? 0} · 记录
-                 </button>
-               )}
+             <div ref={headerActionsMenuRef}>
+               <AdminHeaderActionsMenu
+                 open={headerActionsMenuOpen}
+                 onToggle={() => setHeaderActionsMenuOpen((v) => !v)}
+                 onClose={() => setHeaderActionsMenuOpen(false)}
+                 isThemeLoading={isThemeLoading}
+                 blogRefreshBusy={blogRefreshBusy}
+                 blogRefreshCooldownSec={blogRefreshCooldownSec}
+                 onShellRefresh={handleManualDeploy}
+                 fullRedeployBusy={fullRedeployBusy}
+                 fullRedeployCooldownSec={fullRedeployCooldownSec}
+                 fullRedeployConfigured={fullRedeployConfigured}
+                 onFullRedeploy={openFullRedeployConfirm}
+                 crawlerIngestBusy={crawlerIngestBusy}
+                 crawlerIngestConfigured={crawlerIngestConfigured}
+                 crawlerIngestSummary={crawlerIngestSummary}
+                 onCrawlerIngest={handleCrawlerIngestRun}
+                 onOpenIngestList={openCrawlerIngestModal}
+               />
              </div>
-             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-               <button
-                 type="button"
-                 onClick={openFullRedeployConfirm}
-                 disabled={
-                   isThemeLoading ||
-                   fullRedeployBusy ||
-                   fullRedeployCooldownSec > 0 ||
-                   !fullRedeployConfigured
-                 }
-                 style={{
-                   background: fullRedeployCooldownSec > 0 ? '#424242' : '#9a6dd7',
-                   border: fullRedeployCooldownSec > 0 ? '1px solid #666' : '1px solid #9a6dd7',
-                   padding: '10px 16px',
-                   borderRadius: '8px',
-                   color: fullRedeployCooldownSec > 0 ? '#888' : '#fff',
-                   cursor:
-                     isThemeLoading ||
-                     fullRedeployBusy ||
-                     fullRedeployCooldownSec > 0 ||
-                     !fullRedeployConfigured
-                       ? 'not-allowed'
-                       : 'pointer',
-                   opacity:
-                     isThemeLoading ||
-                     fullRedeployBusy ||
-                     fullRedeployCooldownSec > 0 ||
-                     !fullRedeployConfigured
-                       ? 0.45
-                       : 1,
-                   fontSize: '13px',
-                   fontWeight: 'bold',
-                   whiteSpace: 'nowrap',
-                   boxShadow: fullRedeployCooldownSec > 0 ? 'none' : '0 2px 8px rgba(154,109,215,0.3)',
-                 }}
-                 title={
-                   !fullRedeployConfigured
-                     ? '未配置 Vercel 部署钩子，请联系管理'
-                     : fullRedeployCooldownSec > 0
-                       ? '今日已执行全量更新，请等待24h后尝试'
-                       : '触发 Vercel 全量重部署（24 小时内仅一次）'
-                 }
-               >
-                 {fullRedeployBusy ? '触发中…' : '全量刷新'}
-               </button>
-               {fullRedeployCooldownSec > 0 && (
-                 <span style={{ fontSize: '11px', color: '#888', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
-                   今日已执行全量更新，请等待24h后尝试
-                 </span>
-               )}
-             </div>
-             <button
-               type="button"
-               onClick={handleManualDeploy}
-               disabled={isThemeLoading || blogRefreshBusy || blogRefreshCooldownSec > 0}
-               style={{
-                 background: '#424242',
-                 border: '1px solid greenyellow',
-                 padding: '10px 12px',
-                 borderRadius: '8px',
-                 color: 'greenyellow',
-                 cursor: (isThemeLoading || blogRefreshBusy || blogRefreshCooldownSec > 0) ? 'not-allowed' : 'pointer',
-                 opacity: (isThemeLoading || blogRefreshBusy || blogRefreshCooldownSec > 0) ? 0.45 : 1,
-                 display: 'flex',
-                 alignItems: 'center',
-                 justifyContent: 'center',
-                 minWidth: '40px',
-                 minHeight: '40px',
-               }}
-               title={
-                 blogRefreshCooldownSec > 0
-                   ? `刷新冷却中（${blogRefreshCooldownSec}s）`
-                   : '刷新首页、自定义页面、归档与分类/标签列表（不重建全部文章内页）'
-               }
-             >
-               {blogRefreshBusy ? (
-                 <span style={blogRefreshSpinStyle} aria-hidden />
-               ) : (
-                 <Icons.Refresh />
-               )}
-             </button>
              {view === 'list' ? <AnimatedBtn text="发布新内容" onClick={handleCreate} /> : <AnimatedBtn text="返回列表" onClick={leaveEditView} />}
            </div>
         </header>
