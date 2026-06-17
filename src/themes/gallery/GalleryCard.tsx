@@ -91,7 +91,10 @@ export const GalleryCard = ({ post }: { post: Post }) => {
           </div>
 
           {tags.length > 0 ? (
-            <p className={`mt-0.5 line-clamp-2 ${galleryCardTagClass}`}>
+            <p
+              className={`mt-0.5 truncate ${galleryCardTagClass}`}
+              title={tags.map((t) => t.name).join(', ')}
+            >
               {tags.map((tag, index) => (
                 <span key={tag.id}>
                   {index > 0 ? (
