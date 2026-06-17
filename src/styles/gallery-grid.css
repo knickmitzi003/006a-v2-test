@@ -1,8 +1,6 @@
 /**
- * Gallery Epic 流体网格：固定最小列宽 + auto-fill，窗口变窄时列数自然减少。
- * 父级需加 .gallery-content-container（container-type: inline-size）。
- *
- * 勿用 cqi 作列最小宽——cqi 随容器同比缩放，会导致列数几乎不变（始终 ~5 列）。
+ * Gallery 流体网格：父级需加 .gallery-content-container（container-type: inline-size）。
+ * 列表卡片与文章图库使用固定列数阶梯；其余网格仍用 auto-fill。
  */
 
 .gallery-content-container {
@@ -12,8 +10,6 @@
   min-width: 0;
 }
 
-.gallery-card-grid,
-.gallery-card-grid,
 .gallery-pill-grid,
 .gallery-recommend-grid,
 .gallery-tag-grid {
@@ -63,18 +59,32 @@
 }
 
 /*
- * 首页 / 列表卡片：~17.5rem 最小宽
- * 宽屏 5 列 → 缩窗 4 → 3 → 2，卡片在 1fr 轨道内随宽度伸缩
+ * 首页 / 分类 / 标签列表卡片：固定列数阶梯（与 gallery-media-grid 一致思路）
+ * 缩窗时先让整页同比缩小，到达阈值后再减列，避免 auto-fill 过早掉列且 1fr 把卡片撑大。
  */
 .gallery-card-grid {
-  --gallery-col-min: 17.5rem;
+  display: grid;
+  width: 100%;
   column-gap: 0.625rem;
   row-gap: 1.5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-@container gallery (max-width: 22rem) {
+@container gallery (min-width: 26rem) {
   .gallery-card-grid {
-    --gallery-col-min: 10.5rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container gallery (min-width: 38rem) {
+  .gallery-card-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@container gallery (min-width: 62rem) {
+  .gallery-card-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 

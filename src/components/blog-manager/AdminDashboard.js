@@ -1495,7 +1495,7 @@ const CrawlerIngestModal = ({
           )}
         </div>
         <div className="cover-modal-actions" style={{ marginTop: '16px' }}>
-          <button type="button" className="cover-modal-btn cover-modal-btn-secondary" onClick={onRefresh} disabled={busy}>
+          <button type="button" className="cover-modal-btn cover-modal-btn-secondary" onClick={onRefresh}>
             刷新列表
           </button>
           <button
@@ -1511,10 +1511,15 @@ const CrawlerIngestModal = ({
           >
             {busy ? '入库中…' : '立即入库'}
           </button>
-          <button type="button" className="cover-modal-btn cover-modal-btn-secondary" onClick={onClose} disabled={busy}>
-            关闭
+          <button type="button" className="cover-modal-btn cover-modal-btn-secondary" onClick={onClose}>
+            {busy ? '关闭（后台继续）' : '关闭'}
           </button>
         </div>
+        {busy ? (
+          <p style={{ marginTop: '10px', fontSize: '11px', color: '#888', textAlign: 'center' }}>
+            入库在服务端执行，关闭窗口不会中断；完成后可点「刷新列表」查看结果。
+          </p>
+        ) : null}
       </div>
     </div>
   );

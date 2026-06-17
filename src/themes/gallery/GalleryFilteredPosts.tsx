@@ -24,6 +24,8 @@ type GalleryFilteredPostsProps = {
   /** 列表上方标题（分类名 / 标签名） */
   title: string
   emptyLabel?: string
+  /** 分类详情：最新文章封面 / 正文首图作为 banner 背景 */
+  bannerImageUrl?: string | null
 }
 
 /**
@@ -34,6 +36,7 @@ export function GalleryFilteredPosts({
   breadcrumbItems,
   title,
   emptyLabel = '暂无文章',
+  bannerImageUrl,
 }: GalleryFilteredPostsProps) {
   const router = useRouter()
 
@@ -80,12 +83,29 @@ export function GalleryFilteredPosts({
       <GalleryBreadcrumb items={breadcrumbItems} />
 
       <main className={`${galleryContentContainerClass} flex-1 px-5 pb-10 pt-2`}>
-        <header className="mb-6 px-1">
-          <h1 className={galleryPostTitleClass}>{title}</h1>
-          <p className="mt-2 font-gallery text-[13px] text-neutral-400">
-            共 {listPosts.length} 篇
-          </p>
-        </header>
+        {bannerImageUrl ? (
+          <header className="gallery-filter-banner -mx-5 sm:-mx-5">
+            <div
+              className="gallery-filter-banner__bg"
+              style={{ backgroundImage: `url(${bannerImageUrl})` }}
+              aria-hidden
+            />
+            <div className="gallery-filter-banner__overlay" aria-hidden />
+            <h1 className={`gallery-filter-banner__title ${galleryPostTitleClass}`}>
+              {title}
+            </h1>
+            <p className="gallery-filter-banner__meta font-gallery">
+              共 {listPosts.length} 篇
+            </p>
+          </header>
+        ) : (
+          <header className="mb-6 px-1">
+            <h1 className={galleryPostTitleClass}>{title}</h1>
+            <p className="mt-2 font-gallery text-[13px] text-neutral-400">
+              共 {listPosts.length} 篇
+            </p>
+          </header>
+        )}
 
         {displayPosts.length === 0 ? (
           <div className="py-24 text-center text-sm text-neutral-400">

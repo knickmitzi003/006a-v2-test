@@ -12,6 +12,11 @@ import { withNavFooterStaticProps } from '@/src/lib/blog/withNavFooterStaticProp
 import { onDemandStaticPaths } from '@/src/lib/blog/postLimits'
 import { addSubTitle, getSubTitleInfo } from '@/src/lib/util'
 import {
+  getLatestPostByDate,
+  resolveGalleryPostBannerSrc,
+} from '@/src/lib/gallery/postCover'
+import { getAllBlocks } from '@/src/lib/notion/getBlocks'
+import {
   Category,
   NextPageWithLayout,
   Post,
@@ -42,11 +47,36 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     )
     const category = postsByCategory[0].category
 
+    let categoryBannerImage: string | null = null
+    if (
+      sharedPageStaticProps.props.activeTheme === 'gallery' &&
+      postsByCategory.length > 0
+    ) {
+      const latestPost = getLatestPostByDate(postsByCategory)
+      if (latestPost) {
+        let banner = resolveGalleryPostBannerSrc(latestPost)
+        if (!banner && latestPost.id) {
+          try {
+            const blocks = await getAllBlocks(latestPost.id)
+            banner = resolveGalleryPostBannerSrc(latestPost, blocks)
+          } catch (err) {
+            console.warn(
+              '[category] banner blocks load failed:',
+              latestPost.slug,
+              err
+            )
+          }
+        }
+        categoryBannerImage = banner || null
+      }
+    }
+
     return {
       props: {
         ...sharedPageStaticProps.props,
         posts: postsByCategory,
         category,
+        categoryBannerImage,
         subTitle,
       },
       revalidate: CONFIG.NEXT_REVALIDATE_SECONDS,
@@ -59,7 +89,8 @@ const CategoryPage: NextPage<{
   posts: Post[]
   subTitle: Title
   activeTheme?: string
-}> = ({ category, posts, subTitle, activeTheme }) => {
+  categoryBannerImage?: string | null
+}> = ({ category, posts, subTitle, activeTheme, categoryBannerImage }) => {
   if (!category) return <Section404 />
 
   category.count = posts.length
@@ -71,6 +102,7 @@ const CategoryPage: NextPage<{
       <GalleryFilteredPosts
         posts={posts}
         title={category.name}
+        bannerImageUrl={categoryBannerImage}
         breadcrumbItems={[
           { label: '首页', href: '/' },
           { label: parentLabel, href: parentHref },
