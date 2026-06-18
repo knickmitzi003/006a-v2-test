@@ -24,13 +24,12 @@ function splitCountAndSize(rawCount: string, rawSize: string) {
   }
 }
 
-/** 文章内页 / 下载页标题行：分类名 + 标题 + 下载信息（数量与大小） */
+/** 文章内页 / 下载页标题行：标题 + 下载信息（数量与大小） */
 export function GalleryPostTitleLine({
   post,
   titleClass,
   className = '',
 }: GalleryPostTitleLineProps) {
-  const categoryName = post.category?.name?.trim() ?? ''
   const { count, size } = splitCountAndSize(
     post.options?.downloadCount ?? '',
     post.options?.downloadSize ?? ''
@@ -40,7 +39,6 @@ export function GalleryPostTitleLine({
   return (
     <h1 className={`min-w-0 ${titleClass} ${className}`.trim()}>
       <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        {categoryName ? <span>{categoryName}</span> : null}
         <span>{post.title}</span>
         {downloadText ? <span>{downloadText}</span> : null}
       </span>

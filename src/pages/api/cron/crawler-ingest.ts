@@ -34,12 +34,23 @@ export default async function handler(
 
   try {
     if (req.method === 'GET') {
-      const summary = await getCrawlerQueueSummary()
-      return res.status(200).json({ success: true, summary })
+      // 仅查询队列状态（手动探活）；Vercel Cron 使用 GET，默认应执行入库
+      const summaryOnly =
+        req.query.status === '1' || req.query.summary === '1'
+      if (summaryOnly) {
+        const summary = await getCrawlerQueueSummary()
+        return res.status(200).json({ success: true, summary })
+      }
+      const result = await runCrawlerIngestJob(res)
+      return res.status(200).json({ success: true, ...result })
     }
 
-    const result = await runCrawlerIngestJob(res)
-    return res.status(200).json({ success: true, ...result })
+    if (req.method === 'POST') {
+      const result = await runCrawlerIngestJob(res)
+      return res.status(200).json({ success: true, ...result })
+    }
+
+    return res.status(405).json({ success: false, error: 'Method not allowed' })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error('crawler-ingest cron error:', error)
