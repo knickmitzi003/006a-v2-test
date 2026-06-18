@@ -134,6 +134,8 @@ function formatJobElapsed(startedAt) {
 const PUBLISH_POST_FETCH_TIMEOUT_MS = 90_000;
 /** 爬虫入库：Notion + 图库 + 多页 revalidate，允许较长等待 */
 const CRAWLER_INGEST_FETCH_TIMEOUT_MS = 300_000;
+/** 与默认 CRAWLER_INGEST_BATCH_SIZE 一致，仅用于后台进度展示 */
+const CRAWLER_INGEST_BATCH_HINT = 20;
 const PUBLISH_QUEUE_META_KEY = 'admin_publish_queue_meta';
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = PUBLISH_POST_FETCH_TIMEOUT_MS) {
@@ -1374,10 +1376,12 @@ const CrawlerIngestModal = ({
   open,
   closing,
   busy,
+  progress,
   configured,
   summary,
   items,
   onRun,
+  onCancel,
   onRetry,
   onRefresh,
   onClose,
@@ -1396,6 +1400,19 @@ const CrawlerIngestModal = ({
   }, [open, closing]);
 
   if (!open && !closing) return null;
+
+  const pendingCount = summary?.pending ?? 0;
+  const progressPct =
+    progress && progress.initialPending > 0
+      ? Math.min(
+          100,
+          Math.round(
+            ((progress.initialPending - progress.remainingPending) /
+              progress.initialPending) *
+              100
+          )
+        )
+      : 0;
 
   const formatQueueTime = (value) => {
     if (!value) return '—';
@@ -1427,8 +1444,68 @@ const CrawlerIngestModal = ({
           <br />
           <span style={{ fontSize: '12px', color: '#888' }}>
             入库后 slug 由 BLOG 自动生成（p- 时间戳），不使用爬虫源站 ID；列表中 slug 为博客地址。
+            {pendingCount > 0 && !busy ? (
+              <>
+                <br />
+                点击「全部入库」将每批 {CRAWLER_INGEST_BATCH_HINT} 条自动连续处理，直至待入库清空。
+              </>
+            ) : null}
           </span>
         </p>
+        {busy && progress ? (
+          <div
+            style={{
+              marginBottom: '12px',
+              padding: '12px 14px',
+              background: '#1a4d5c',
+              borderRadius: '8px',
+              border: '1px solid #3db8d9',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '12px',
+                color: '#7ee8fc',
+                marginBottom: '8px',
+                gap: '12px',
+              }}
+            >
+              <span style={{ fontWeight: 700 }}>
+                第 {progress.batchIndex} 批入库中…
+              </span>
+              <span style={{ color: '#bde8f5' }}>
+                剩余 {progress.remainingPending} / 共 {progress.initialPending}
+              </span>
+            </div>
+            <div
+              style={{
+                height: '6px',
+                background: '#0d2a33',
+                borderRadius: '3px',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  height: '100%',
+                  width: `${progressPct}%`,
+                  background: 'linear-gradient(90deg, #3db8d9, #7ee8fc)',
+                  transition: 'width 0.35s ease',
+                }}
+              />
+            </div>
+            <p style={{ marginTop: '8px', fontSize: '11px', color: '#aaa', lineHeight: 1.45 }}>
+              已成功 {progress.succeededTotal} · 失败 {progress.failedTotal} · 每批约{' '}
+              {CRAWLER_INGEST_BATCH_HINT} 条
+              {(summary?.processing ?? 0) > 0
+                ? ` · 处理中卡住 ${summary.processing}（可刷新后重试）`
+                : ''}
+            </p>
+          </div>
+        ) : null}
         <div
           style={{
             maxHeight: '360px',
@@ -1509,29 +1586,46 @@ const CrawlerIngestModal = ({
           )}
         </div>
         <div className="cover-modal-actions" style={{ marginTop: '16px' }}>
-          <button type="button" className="cover-modal-btn cover-modal-btn-secondary" onClick={onRefresh}>
-            刷新列表
-          </button>
           <button
             type="button"
-            className="cover-modal-btn"
-            onClick={onRun}
-            disabled={busy || !configured}
-            style={{
-              background: busy ? '#1a4d5c' : '#3db8d9',
-              color: '#fff',
-              boxShadow: busy ? 'none' : '0 4px 14px rgba(61,184,217,0.35)',
-            }}
+            className="cover-modal-btn cover-modal-btn-secondary"
+            onClick={onRefresh}
+            disabled={busy}
           >
-            {busy ? '入库中…' : '立即入库'}
+            刷新列表
           </button>
+          {busy ? (
+            <button
+              type="button"
+              className="cover-modal-btn cover-modal-btn-secondary"
+              onClick={onCancel}
+              style={{ borderColor: '#f87171', color: '#f87171' }}
+            >
+              停止入库
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="cover-modal-btn"
+              onClick={onRun}
+              disabled={!configured || pendingCount <= 0}
+              style={{
+                background: pendingCount <= 0 ? '#424242' : '#3db8d9',
+                color: '#fff',
+                boxShadow:
+                  pendingCount <= 0 ? 'none' : '0 4px 14px rgba(61,184,217,0.35)',
+              }}
+            >
+              {pendingCount > 0 ? `全部入库（${pendingCount}）` : '暂无待入库'}
+            </button>
+          )}
           <button type="button" className="cover-modal-btn cover-modal-btn-secondary" onClick={onClose}>
             {busy ? '关闭（后台继续）' : '关闭'}
           </button>
         </div>
         {busy ? (
           <p style={{ marginTop: '10px', fontSize: '11px', color: '#888', textAlign: 'center' }}>
-            入库在服务端执行，关闭窗口不会中断；完成后可点「刷新列表」查看结果。
+            入库在浏览器中自动分批执行；关闭窗口不会中断，可点「停止入库」在当前批次结束后暂停。
           </p>
         ) : null}
       </div>
@@ -1553,6 +1647,7 @@ const AdminHeaderActionsMenu = ({
   fullRedeployConfigured,
   onFullRedeploy,
   crawlerIngestBusy,
+  crawlerIngestProgress,
   crawlerIngestConfigured,
   crawlerIngestSummary,
   onCrawlerIngest,
@@ -1644,10 +1739,25 @@ const AdminHeaderActionsMenu = ({
             title={
               !crawlerIngestConfigured
                 ? '未配置 Supabase 图库租户，请联系管理'
-                : '立即消费 Supabase 爬虫队列：写入 Notion + 图库并刷新相关前台页面'
+                : '每批约 20 条自动连续入库，直至待入库清空'
             }
           >
-            {crawlerIngestBusy ? '入库中…' : '爬虫入库'}
+            {crawlerIngestBusy ? (
+              crawlerIngestProgress ? (
+                <>
+                  入库 {crawlerIngestProgress.initialPending - crawlerIngestProgress.remainingPending}/
+                  {crawlerIngestProgress.initialPending}
+                  <span className="header-actions-menu-item__hint">
+                    第 {crawlerIngestProgress.batchIndex} 批 · 剩 {crawlerIngestProgress.remainingPending} · 成功{' '}
+                    {crawlerIngestProgress.succeededTotal}
+                  </span>
+                </>
+              ) : (
+                '入库中…'
+              )
+            ) : (
+              '全部入库'
+            )}
             {crawlerIngestConfigured && crawlerIngestSummary ? (
               <span className="header-actions-menu-item__hint">
                 待入库 {crawlerIngestSummary.pending ?? 0} · 已完成{' '}
@@ -3108,6 +3218,8 @@ const [mounted, setMounted] = useState(false);
   const [crawlerIngestModalOpen, setCrawlerIngestModalOpen] = useState(false);
   const [crawlerIngestModalClosing, setCrawlerIngestModalClosing] = useState(false);
   const crawlerIngestModalTimerRef = useRef(null);
+  const [crawlerIngestProgress, setCrawlerIngestProgress] = useState(null);
+  const crawlerIngestCancelRef = useRef(false);
   const [headerActionsMenuOpen, setHeaderActionsMenuOpen] = useState(false);
   const headerActionsMenuRef = useRef(null);
   const adminToastTimerRef = useRef(null);
@@ -4247,55 +4359,113 @@ const [mounted, setMounted] = useState(false);
     }
   };
 
+  const handleCrawlerIngestCancel = () => {
+    if (!crawlerIngestBusy) return;
+    crawlerIngestCancelRef.current = true;
+    showAdminToast('将在当前批次完成后停止入库…');
+  };
+
   const handleCrawlerIngestRun = async () => {
     if (isThemeLoading || crawlerIngestBusy) return;
     if (!crawlerIngestConfigured) {
       showAdminToast('爬虫入库未配置（Supabase + BLOG_SITE_ID）');
       return;
     }
+
+    crawlerIngestCancelRef.current = false;
     setCrawlerIngestBusy(true);
+    setCrawlerIngestModalOpen(true);
+    setCrawlerIngestModalClosing(false);
+
+    let succeededTotal = 0;
+    let failedTotal = 0;
+    let batchIndex = 0;
+    let initialPending = 0;
+
+    const pushProgress = (remainingPending) => {
+      setCrawlerIngestProgress({
+        batchIndex,
+        initialPending,
+        succeededTotal,
+        failedTotal,
+        remainingPending,
+      });
+    };
+
     try {
-      const statusRes = await fetch('/api/admin/crawler-ingest');
-      const statusData = await statusRes.json();
-      if (!statusRes.ok || !statusData.success) {
-        throw new Error(statusData.error || '无法读取爬虫队列');
-      }
-      if (statusData.summary) setCrawlerIngestSummary(statusData.summary);
-      const pendingCount = statusData.summary?.pending ?? 0;
-      if (pendingCount <= 0) {
+      const statusData = await fetchCrawlerIngestStatus();
+      if (!statusData) throw new Error('无法读取爬虫队列');
+      initialPending = statusData.summary?.pending ?? 0;
+      if (initialPending <= 0) {
         showAdminToast('队列中暂无待入库内容（pending 为 0）');
         return;
       }
-      showAdminToast(`正在入库 ${pendingCount} 篇待处理内容…`);
-      const res = await fetchWithTimeout(
-        '/api/admin/crawler-ingest',
-        { method: 'POST' },
-        CRAWLER_INGEST_FETCH_TIMEOUT_MS
+
+      pushProgress(initialPending);
+      showAdminToast(
+        `开始全部入库：共 ${initialPending} 条，每批 ${CRAWLER_INGEST_BATCH_HINT} 条自动连续处理`
       );
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || '爬虫入库失败');
+
+      let remaining = initialPending;
+
+      while (true) {
+        if (crawlerIngestCancelRef.current) break;
+
+        batchIndex += 1;
+        pushProgress(remaining);
+
+        const res = await fetchWithTimeout(
+          '/api/admin/crawler-ingest',
+          { method: 'POST' },
+          CRAWLER_INGEST_FETCH_TIMEOUT_MS
+        );
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || '爬虫入库失败');
+        }
+
+        succeededTotal += data.succeeded || 0;
+        failedTotal += data.failed || 0;
+
+        const afterBatch = await fetchCrawlerIngestStatus();
+        remaining = afterBatch?.summary?.pending ?? 0;
+        pushProgress(remaining);
+
+        const processed = data.processed || 0;
+        if (processed === 0 || remaining === 0) break;
+        if (crawlerIngestCancelRef.current) break;
+
+        await new Promise((r) => setTimeout(r, 400));
       }
-      if (data.summary) setCrawlerIngestSummary(data.summary);
-      if (data.items) setCrawlerIngestList(data.items);
+
       await fetchPosts();
-      const failedItems = (data.items || []).filter((it) => it.status === 'failed');
-      if (data.failed > 0 && failedItems.length > 0) {
-        const firstErr = failedItems[0]?.error || '';
+      const finalStatus = await fetchCrawlerIngestStatus();
+      const finalRemaining = finalStatus?.summary?.pending ?? 0;
+      const cancelled = crawlerIngestCancelRef.current;
+
+      if (cancelled && finalRemaining > 0) {
         showAdminToast(
-          `入库完成：成功 ${data.succeeded}，失败 ${data.failed}。${firstErr ? ` 例：${firstErr}` : ''}`
+          `已停止：成功 ${succeededTotal}，失败 ${failedTotal}，剩余待入库 ${finalRemaining}`
         );
-      } else if (data.processed === 0) {
-        showAdminToast('没有待入库内容');
+      } else if (failedTotal > 0) {
+        showAdminToast(
+          `全部入库结束：成功 ${succeededTotal}，失败 ${failedTotal}（失败项可在列表中重试）`
+        );
+      } else if (succeededTotal > 0) {
+        showAdminToast(`全部入库完成：成功 ${succeededTotal} 篇，已更新前台页面`);
       } else {
-        showAdminToast(
-          `爬虫入库完成：成功 ${data.succeeded} 篇，已更新前台页面`
-        );
+        showAdminToast('没有待入库内容');
       }
     } catch (e) {
-      showAdminToast(e?.message || '爬虫入库失败');
+      const partial =
+        succeededTotal > 0 || failedTotal > 0
+          ? `（已完成 ${succeededTotal + failedTotal} 条：成功 ${succeededTotal}，失败 ${failedTotal}）`
+          : '';
+      showAdminToast((e?.message || '爬虫入库失败') + partial);
     } finally {
       setCrawlerIngestBusy(false);
+      setCrawlerIngestProgress(null);
+      crawlerIngestCancelRef.current = false;
     }
   };
 
@@ -4662,10 +4832,12 @@ const [mounted, setMounted] = useState(false);
         open={crawlerIngestModalOpen}
         closing={crawlerIngestModalClosing}
         busy={crawlerIngestBusy}
+        progress={crawlerIngestProgress}
         configured={crawlerIngestConfigured}
         summary={crawlerIngestSummary}
         items={crawlerIngestList}
         onRun={handleCrawlerIngestRun}
+        onCancel={handleCrawlerIngestCancel}
         onRetry={handleCrawlerIngestRetry}
         onRefresh={fetchCrawlerIngestStatus}
         onClose={closeCrawlerIngestModal}
@@ -4703,6 +4875,7 @@ const [mounted, setMounted] = useState(false);
                  fullRedeployConfigured={fullRedeployConfigured}
                  onFullRedeploy={openFullRedeployConfirm}
                  crawlerIngestBusy={crawlerIngestBusy}
+                 crawlerIngestProgress={crawlerIngestProgress}
                  crawlerIngestConfigured={crawlerIngestConfigured}
                  crawlerIngestSummary={crawlerIngestSummary}
                  onCrawlerIngest={handleCrawlerIngestRun}
