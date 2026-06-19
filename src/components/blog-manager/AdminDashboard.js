@@ -71,6 +71,43 @@ function triggerShellBlogRefresh(extra = {}) {
   });
 }
 
+/** 列表变更（移入回收站 / 恢复 / 彻底删除）后：文章处理 + 刷新列表 + 刷新前台 */
+const LIST_MUTATION_REFRESH_STEPS = 2;
+
+async function executeListMutationWithProgress({
+  phase,
+  itemCount,
+  mutateItems,
+  afterRefresh,
+  shellRefreshOptions = {},
+  setLoading,
+  setSavePhase,
+  setSaveProgress,
+  fetchPostsFn,
+}) {
+  const total = itemCount + LIST_MUTATION_REFRESH_STEPS;
+  setLoading(true);
+  setSavePhase(phase);
+  setSaveProgress({ done: 0, total });
+
+  const report = (done, hint) => setSaveProgress({ done, total, hint });
+
+  try {
+    await mutateItems(report);
+    report(itemCount, '正在刷新列表…');
+    await fetchPostsFn({ silent: true });
+    report(itemCount + 1, '正在刷新前台缓存…');
+    const rev = await triggerShellBlogRefresh(shellRefreshOptions);
+    if (afterRefresh) await afterRefresh(rev);
+    report(total, '完成');
+    return rev;
+  } finally {
+    setLoading(false);
+    setSavePhase('');
+    setSaveProgress(null);
+  }
+}
+
 function showRevalidateFeedback(result, showAdminToastFn) {
   if (!result || !showAdminToastFn) return;
   const { ok, succeeded, failed, total } = result;
@@ -1100,7 +1137,15 @@ const SAVE_PHASE_META = {
     hint: '批量处理中，请稍候',
   },
   delete: {
-    title: '正在删除文章',
+    title: '正在彻底删除',
+    hint: '请勿关闭页面',
+  },
+  archive: {
+    title: '正在移入回收站',
+    hint: '请勿关闭页面',
+  },
+  restore: {
+    title: '正在恢复文章',
     hint: '请勿关闭页面',
   },
 };
@@ -1129,7 +1174,7 @@ const FullScreenLoader = ({ phase, progress }) => {
   const pct = hasProgress
     ? Math.min(100, Math.round((progress.done / progress.total) * 100))
     : 0;
-  const progressUnit = phase === 'delete' ? '篇' : '页';
+  const progressUnit = ['delete', 'archive', 'restore'].includes(phase) ? '步' : '页';
   const stepLine = isTheme && progress?.totalSteps
     ? `步骤 ${progress.step} / ${progress.totalSteps}`
     : null;
@@ -1148,10 +1193,24 @@ const FullScreenLoader = ({ phase, progress }) => {
       {title ? <div className="loader-phase">{title}</div> : null}
       {hasProgress ? (
         <div className="loader-detail">
-          已完成 {progress.done} / {progress.total} {progressUnit}（{pct}%）
+          {progress.hint ? (
+            <>
+              {progress.hint}
+              <span style={{ opacity: 0.75 }}>
+                {' '}
+                · {progress.done}/{progress.total}（{pct}%）
+              </span>
+            </>
+          ) : (
+            <>已完成 {progress.done} / {progress.total} {progressUnit}（{pct}%）</>
+          )}
         </div>
       ) : (
-        <div className="loader-detail">{isTheme || phase === 'post' || phase === 'delete' ? '请稍候…' : ''}</div>
+        <div className="loader-detail">
+          {isTheme || phase === 'post' || phase === 'delete' || phase === 'archive' || phase === 'restore'
+            ? '请稍候…'
+            : ''}
+        </div>
       )}
       {hasProgress || isTheme ? (
         <div className="loader-progress-track">
@@ -4730,82 +4789,106 @@ const [mounted, setMounted] = useState(false);
     }
   };
 
+  const runListMutation = (options) =>
+    executeListMutationWithProgress({
+      ...options,
+      setLoading,
+      setSavePhase,
+      setSaveProgress,
+      fetchPostsFn: fetchPosts,
+    });
+
   const handleDeletePost = async (p) => {
-    if (!confirm('移到回收站？可在回收站中恢复。')) return;
-    setLoading(true);
+    if (!confirm('移至回收站')) return;
     try {
-      const res = await fetch('/api/admin/post?id=' + p.id, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: p.id, type: 'Piece' }),
+      const rev = await runListMutation({
+        phase: 'archive',
+        itemCount: 1,
+        shellRefreshOptions: { contentChange: true },
+        mutateItems: async (report) => {
+          report(0, '正在移入回收站…');
+          const res = await fetch('/api/admin/post?id=' + p.id, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: p.id, type: 'Piece' }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || '移入回收站失败');
+          }
+          report(1, '已更新文章状态');
+        },
+        afterRefresh: async () => {
+          void triggerContentRevalidation({
+            scope: 'delete',
+            slug: p.slug,
+            category: p.category || '',
+            tags: p.tags || '',
+          }).catch((e) => console.warn('归档后页面刷新失败', e));
+        },
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || '移入回收站失败');
-      }
-      await fetchPosts({ silent: true });
-      const rev = await triggerShellBlogRefresh({ contentChange: true });
-      void triggerContentRevalidation({
-        scope: 'delete',
-        slug: p.slug,
-        category: p.category || '',
-        tags: p.tags || '',
-      }).catch((e) => console.warn('归档后页面刷新失败', e));
       showRevalidateFeedback(rev, showAdminToast);
       showAdminToast('已移到回收站');
     } catch (e) {
       alert('移入回收站失败：' + (e.message || '未知错误'));
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleRestorePost = async (p) => {
-    setLoading(true);
     try {
-      const res = await fetch('/api/admin/post?id=' + p.id, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: p.id, type: 'Post' }),
+      const rev = await runListMutation({
+        phase: 'restore',
+        itemCount: 1,
+        shellRefreshOptions: { contentChange: true },
+        mutateItems: async (report) => {
+          report(0, '正在恢复文章…');
+          const res = await fetch('/api/admin/post?id=' + p.id, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: p.id, type: 'Post' }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || '恢复失败');
+          }
+          report(1, '已更新文章状态');
+        },
+        afterRefresh: async () => {
+          void triggerContentRevalidation({
+            scope: 'post',
+            slug: p.slug,
+            category: p.category || '',
+            tags: p.tags || '',
+          }).catch((e) => console.warn('恢复后页面刷新失败', e));
+        },
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || '恢复失败');
-      }
-      await fetchPosts({ silent: true });
-      const rev = await triggerShellBlogRefresh({ contentChange: true });
-      void triggerContentRevalidation({
-        scope: 'post',
-        slug: p.slug,
-        category: p.category || '',
-        tags: p.tags || '',
-      }).catch((e) => console.warn('恢复后页面刷新失败', e));
       showRevalidateFeedback(rev, showAdminToast);
       showAdminToast('已恢复文章');
     } catch (e) {
       alert('恢复失败：' + (e.message || '未知错误'));
-    } finally {
-      setLoading(false);
     }
   };
 
   const handlePermanentDeletePost = async (p) => {
     if (!confirm('彻底删除？此操作不可恢复。')) return;
-    setLoading(true);
     try {
-      const res = await fetch('/api/admin/post?id=' + p.id, { method: 'DELETE' });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || '删除失败');
-      }
-      await fetchPosts({ silent: true });
-      const rev = await triggerShellBlogRefresh();
+      const rev = await runListMutation({
+        phase: 'delete',
+        itemCount: 1,
+        mutateItems: async (report) => {
+          report(0, '正在彻底删除…');
+          const res = await fetch('/api/admin/post?id=' + p.id, { method: 'DELETE' });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || '删除失败');
+          }
+          report(1, '已从数据库移除');
+        },
+      });
       showRevalidateFeedback(rev, showAdminToast);
       showAdminToast('已彻底删除');
     } catch (e) {
       alert('删除失败：' + (e.message || '未知错误'));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -4847,37 +4930,40 @@ const [mounted, setMounted] = useState(false);
     const ids = [...selectedPostIds];
     if (!ids.length) return;
     if (!confirm(`将 ${ids.length} 篇文章移到回收站？`)) return;
-    setLoading(true);
-    setSavePhase('delete');
-    setSaveProgress({ done: 0, total: ids.length });
+    const archived = posts.filter((p) => ids.includes(p.id));
     let ok = 0;
     let fail = 0;
-    const archived = posts.filter((p) => ids.includes(p.id));
     try {
-      for (let i = 0; i < ids.length; i++) {
-        const id = ids[i];
-        const res = await fetch('/api/admin/post?id=' + id, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, type: 'Piece' }),
-        });
-        const data = await res.json();
-        if (res.ok && data.success) ok += 1;
-        else fail += 1;
-        setSaveProgress({ done: i + 1, total: ids.length });
-      }
-      setSaveProgress({ done: ids.length, total: ids.length, hint: '正在刷新列表…' });
-      await fetchPosts({ silent: true });
-      setSaveProgress({ done: ids.length, total: ids.length, hint: '正在刷新前台缓存…' });
-      const rev = await triggerShellBlogRefresh({ contentChange: true });
-      for (const p of archived) {
-        void triggerContentRevalidation({
-          scope: 'delete',
-          slug: p.slug,
-          category: p.category || '',
-          tags: p.tags || '',
-        }).catch((e) => console.warn('归档后页面刷新失败', e));
-      }
+      const rev = await runListMutation({
+        phase: 'archive',
+        itemCount: ids.length,
+        shellRefreshOptions: { contentChange: true },
+        mutateItems: async (report) => {
+          for (let i = 0; i < ids.length; i++) {
+            const id = ids[i];
+            report(i, `正在移入回收站 ${i + 1}/${ids.length} 篇…`);
+            const res = await fetch('/api/admin/post?id=' + id, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id, type: 'Piece' }),
+            });
+            const data = await res.json();
+            if (res.ok && data.success) ok += 1;
+            else fail += 1;
+            report(i + 1, `已处理 ${i + 1}/${ids.length} 篇`);
+          }
+        },
+        afterRefresh: async () => {
+          for (const p of archived) {
+            void triggerContentRevalidation({
+              scope: 'delete',
+              slug: p.slug,
+              category: p.category || '',
+              tags: p.tags || '',
+            }).catch((e) => console.warn('归档后页面刷新失败', e));
+          }
+        },
+      });
       showRevalidateFeedback(rev, showAdminToast);
       setListSelectMode(false);
       setSelectedPostIds([]);
@@ -4885,10 +4971,6 @@ const [mounted, setMounted] = useState(false);
       else showAdminToast(`已移入回收站 ${ok} 篇`);
     } catch (e) {
       alert('批量移入回收站失败：' + (e.message || '未知错误'));
-    } finally {
-      setLoading(false);
-      setSavePhase('');
-      setSaveProgress(null);
     }
   };
 
@@ -4896,24 +4978,24 @@ const [mounted, setMounted] = useState(false);
     const ids = [...selectedPostIds];
     if (!ids.length) return;
     if (!confirm(`彻底删除 ${ids.length} 篇文章？此操作不可恢复。`)) return;
-    setLoading(true);
-    setSavePhase('delete');
-    setSaveProgress({ done: 0, total: ids.length });
     let ok = 0;
     let fail = 0;
     try {
-      for (let i = 0; i < ids.length; i++) {
-        const id = ids[i];
-        const res = await fetch('/api/admin/post?id=' + id, { method: 'DELETE' });
-        const data = await res.json();
-        if (res.ok && data.success) ok += 1;
-        else fail += 1;
-        setSaveProgress({ done: i + 1, total: ids.length });
-      }
-      setSaveProgress({ done: ids.length, total: ids.length, hint: '正在刷新列表…' });
-      await fetchPosts({ silent: true });
-      setSaveProgress({ done: ids.length, total: ids.length, hint: '正在刷新前台缓存…' });
-      const rev = await triggerShellBlogRefresh();
+      const rev = await runListMutation({
+        phase: 'delete',
+        itemCount: ids.length,
+        mutateItems: async (report) => {
+          for (let i = 0; i < ids.length; i++) {
+            const id = ids[i];
+            report(i, `正在彻底删除 ${i + 1}/${ids.length} 篇…`);
+            const res = await fetch('/api/admin/post?id=' + id, { method: 'DELETE' });
+            const data = await res.json();
+            if (res.ok && data.success) ok += 1;
+            else fail += 1;
+            report(i + 1, `已处理 ${i + 1}/${ids.length} 篇`);
+          }
+        },
+      });
       showRevalidateFeedback(rev, showAdminToast);
       setListSelectMode(false);
       setSelectedPostIds([]);
@@ -4921,10 +5003,6 @@ const [mounted, setMounted] = useState(false);
       else showAdminToast(`已彻底删除 ${ok} 篇`);
     } catch (e) {
       alert('批量删除失败：' + (e.message || '未知错误'));
-    } finally {
-      setLoading(false);
-      setSavePhase('');
-      setSaveProgress(null);
     }
   };
 
