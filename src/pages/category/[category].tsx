@@ -45,7 +45,13 @@ export const getStaticProps: GetStaticProps = withNavFooterStaticProps(
     const postsByCategory = formattedPosts.filter(
       (post) => post.category.id === categoryId
     )
-    const category = postsByCategory[0].category
+    const category =
+      postsByCategory[0]?.category ??
+      getAllCategories(formattedPosts).find((c) => c.id === categoryId) ?? {
+        id: categoryId,
+        name: categoryId,
+        color: 'gray' as const,
+      }
 
     let categoryBannerImage: string | null = null
     if (

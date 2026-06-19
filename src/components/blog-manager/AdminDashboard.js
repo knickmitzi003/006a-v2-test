@@ -1089,9 +1089,14 @@ const SAVE_PHASE_META = {
     title: '正在上传图库',
     hint: '批量处理中，请稍候',
   },
+  delete: {
+    title: '正在删除文章',
+    hint: '请勿关闭页面',
+  },
 };
 
 function getGalleryLoaderHint(phase, progress) {
+  if (progress?.hint) return progress.hint;
   if (phase !== 'gallery') return SAVE_PHASE_META[phase]?.hint || '';
   if (progress?.total > 0) return SAVE_PHASE_META.gallery.hint;
   return '正在同步图库内容…';
@@ -1114,6 +1119,7 @@ const FullScreenLoader = ({ phase, progress }) => {
   const pct = hasProgress
     ? Math.min(100, Math.round((progress.done / progress.total) * 100))
     : 0;
+  const progressUnit = phase === 'delete' ? '篇' : '页';
   const stepLine = isTheme && progress?.totalSteps
     ? `步骤 ${progress.step} / ${progress.totalSteps}`
     : null;
@@ -1132,10 +1138,10 @@ const FullScreenLoader = ({ phase, progress }) => {
       {title ? <div className="loader-phase">{title}</div> : null}
       {hasProgress ? (
         <div className="loader-detail">
-          已完成 {progress.done} / {progress.total} 页（{pct}%）
+          已完成 {progress.done} / {progress.total} {progressUnit}（{pct}%）
         </div>
       ) : (
-        <div className="loader-detail">{isTheme || phase === 'post' ? '请稍候…' : ''}</div>
+        <div className="loader-detail">{isTheme || phase === 'post' || phase === 'delete' ? '请稍候…' : ''}</div>
       )}
       {hasProgress || isTheme ? (
         <div className="loader-progress-track">
@@ -3255,6 +3261,8 @@ const [mounted, setMounted] = useState(false);
   const editorBlocksRef = useRef(editorBlocks);
   editorBlocksRef.current = editorBlocks;
   const editingSlugRef = useRef(null);
+  const editingCategoryRef = useRef(null);
+  const editingTagsRef = useRef(null);
   const [blogRefreshBusy, setBlogRefreshBusy] = useState(false);
   const [blogRefreshCooldownSec, setBlogRefreshCooldownSec] = useState(0);
   const blogRefreshCooldownUntilRef = useRef(0);
@@ -3301,7 +3309,7 @@ const [mounted, setMounted] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [galleryItems, setGalleryItems] = useState([]);
   const [galleryDirty, setGalleryDirty] = useState(false);
-  const [savePhase, setSavePhase] = useState(''); // '' | 'media' | 'post' | 'gallery'
+  const [savePhase, setSavePhase] = useState(''); // '' | 'media' | 'post' | 'gallery' | 'delete'
   const [saveProgress, setSaveProgress] = useState(null); // { done, total }
   const [publishQueue, setPublishQueue] = useState([]); // 后台发布队列
   const queueRunningRef = useRef(false);
@@ -3874,6 +3882,8 @@ const [mounted, setMounted] = useState(false);
         setEditorBlocks(eb);
         setCurrentId(p.id);
         editingSlugRef.current = post.slug || null;
+        editingCategoryRef.current = post.category || null;
+        editingTagsRef.current = post.tags || null;
         setView('edit');
         setExpandedStep(1);
       }
@@ -3893,6 +3903,8 @@ const [mounted, setMounted] = useState(false);
     resetSmartParseState();
     setCurrentId(null);
     editingSlugRef.current = null;
+    editingCategoryRef.current = null;
+    editingTagsRef.current = null;
     setView('edit');
     setExpandedStep(1);
   };
@@ -4245,6 +4257,8 @@ const [mounted, setMounted] = useState(false);
             slug: saveSlug,
             category: payload.form.category || '',
             tags: payload.form.tags || '',
+            previousCategory: payload.previousCategory || '',
+            previousTags: payload.previousTags || '',
             previousSlug,
           }).catch((e) => console.warn('文章内页增量刷新失败', e));
         } else if (saveScope === 'page' && saveSlug === 'download') {
@@ -4369,6 +4383,8 @@ const [mounted, setMounted] = useState(false);
         galleryItems: isWidget ? [] : galleryItems.slice(),
         currentId,
         previousSlug: editingSlugRef.current || '',
+        previousCategory: editingCategoryRef.current || '',
+        previousTags: editingTagsRef.current || '',
         willSyncGallery,
         pendingMediaCount,
         pendingGalleryCount,
@@ -4384,6 +4400,8 @@ const [mounted, setMounted] = useState(false);
     setGalleryDirty(false);
     setEditorBlocks([]);
     editingSlugRef.current = null;
+    editingCategoryRef.current = null;
+    editingTagsRef.current = null;
     setCurrentId(null);
     setForm({ title: '', slug: '', excerpt: '', content: '', category: '', tags: '', cover: '', status: 'Published', type: 'Post', date: '', download: '', download_size: '', download_count: '' });
     resetSmartParseState();
@@ -4731,16 +4749,22 @@ const [mounted, setMounted] = useState(false);
     if (!ids.length) return;
     if (!confirm(`彻底删除 ${ids.length} 篇文章？此操作不可恢复。`)) return;
     setLoading(true);
+    setSavePhase('delete');
+    setSaveProgress({ done: 0, total: ids.length });
     let ok = 0;
     let fail = 0;
     try {
-      for (const id of ids) {
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
         const res = await fetch('/api/admin/post?id=' + id, { method: 'DELETE' });
         const data = await res.json();
         if (res.ok && data.success) ok += 1;
         else fail += 1;
+        setSaveProgress({ done: i + 1, total: ids.length });
       }
-      await fetchPosts();
+      setSaveProgress({ done: ids.length, total: ids.length, hint: '正在刷新列表…' });
+      await fetchPosts({ silent: true });
+      setSaveProgress({ done: ids.length, total: ids.length, hint: '正在刷新前台缓存…' });
       const rev = await triggerShellBlogRefresh();
       showRevalidateFeedback(rev, showAdminToast);
       setListSelectMode(false);
@@ -4751,6 +4775,8 @@ const [mounted, setMounted] = useState(false);
       alert('批量删除失败：' + (e.message || '未知错误'));
     } finally {
       setLoading(false);
+      setSavePhase('');
+      setSaveProgress(null);
     }
   };
 

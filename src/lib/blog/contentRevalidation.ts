@@ -232,7 +232,9 @@ export async function collectDeleteRevalidatePaths(
   slug: string,
   options?: {
     categoryId?: string | null
+    previousCategoryId?: string | null
     tagIds?: string[]
+    previousTagIds?: string[]
   }
 ): Promise<string[]> {
   return collectPostRevalidatePaths(slug, options)
@@ -362,7 +364,9 @@ export async function collectPostRevalidatePaths(
   slug: string,
   options?: {
     categoryId?: string | null
+    previousCategoryId?: string | null
     tagIds?: string[]
+    previousTagIds?: string[]
     previousSlug?: string | null
   }
 ): Promise<string[]> {
@@ -384,7 +388,18 @@ export async function collectPostRevalidatePaths(
     paths.add(`/category/${options.categoryId}`)
   }
 
-  for (const tagId of options?.tagIds ?? []) {
+  if (
+    options?.previousCategoryId &&
+    options.previousCategoryId !== options?.categoryId
+  ) {
+    paths.add(`/category/${options.previousCategoryId}`)
+  }
+
+  const tagIds = new Set([
+    ...(options?.tagIds ?? []),
+    ...(options?.previousTagIds ?? []),
+  ])
+  for (const tagId of tagIds) {
     if (tagId) paths.add(`/tag/${tagId}`)
   }
 

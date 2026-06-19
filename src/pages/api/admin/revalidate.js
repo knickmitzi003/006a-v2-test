@@ -42,6 +42,8 @@ export default async function handler(req, res) {
       slug,
       category,
       tags,
+      previousCategory,
+      previousTags,
       previousSlug,
       listScope = 'shell',
       paths: explicitPaths,
@@ -92,7 +94,11 @@ export default async function handler(req, res) {
     }
 
     const categoryId = category?.trim() ? slugify(category.trim()) : null
+    const previousCategoryId = previousCategory?.trim()
+      ? slugify(previousCategory.trim())
+      : null
     const tagIds = resolveTagIds(tags)
+    const previousTagIds = resolveTagIds(previousTags)
 
     let paths
     if (scope === 'batch') {
@@ -104,11 +110,18 @@ export default async function handler(req, res) {
     } else if (scope === 'gallery-ad') {
       paths = await collectGalleryAdRevalidatePaths()
     } else if (scope === 'delete' && slug) {
-      paths = await collectDeleteRevalidatePaths(slug, { categoryId, tagIds })
+      paths = await collectDeleteRevalidatePaths(slug, {
+        categoryId,
+        previousCategoryId,
+        tagIds,
+        previousTagIds,
+      })
     } else if (scope === 'post' && slug) {
       paths = await collectPostRevalidatePaths(slug, {
         categoryId,
+        previousCategoryId,
         tagIds,
+        previousTagIds,
         previousSlug,
       })
     } else if (scope === 'page' && slug) {
@@ -124,7 +137,9 @@ export default async function handler(req, res) {
     } else if (slug) {
       paths = await collectPostRevalidatePaths(slug, {
         categoryId,
+        previousCategoryId,
         tagIds,
+        previousTagIds,
         previousSlug,
       })
     } else {
