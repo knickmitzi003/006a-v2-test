@@ -124,6 +124,8 @@ export async function runCrawlerIngestJob(
     /** 逐条处理直至无待入库或超时 */
     continuous?: boolean
     maxDurationMs?: number
+    /** 批量逐条入库时由客户端在结束后统一刷新壳层 */
+    deferShellRefresh?: boolean
   }
 ): Promise<CrawlerIngestRunResult> {
   if (!isGalleryTenantConfigured()) {
@@ -179,7 +181,7 @@ export async function runCrawlerIngestJob(
     if (targetIds && !continuous) break
   }
 
-  if (succeeded > 0) {
+  if (succeeded > 0 && !options?.deferShellRefresh) {
     try {
       await revalidateShellAfterBatch(res)
     } catch (shellErr) {

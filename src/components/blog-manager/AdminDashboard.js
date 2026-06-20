@@ -1478,6 +1478,7 @@ const CrawlerIngestPanel = ({
   onRetrySelected,
   onReclaimStale,
   onResetProcessingSelected,
+  onCancel,
   onRetry,
   onRefresh,
   onBack,
@@ -1487,6 +1488,8 @@ const CrawlerIngestPanel = ({
   const failedCount = summary?.failed ?? 0;
   const selectedCount = selectedIds.length;
   const selectableTab = tab === 'pending' || tab === 'failed';
+  const sessionDone =
+    progress ? (progress.sessionSucceeded ?? 0) + (progress.sessionFailed ?? 0) : 0;
   const listRows =
     tab === 'pending'
       ? pendingItems
@@ -1496,13 +1499,9 @@ const CrawlerIngestPanel = ({
           ? failedItems
           : logItems;
 
-  const doneEstimate =
-    progress && summary
-      ? Math.max(0, (progress.initialPending ?? 0) - pendingCount)
-      : 0;
   const progressPct =
     progress && progress.initialPending > 0
-      ? Math.min(100, Math.round((doneEstimate / progress.initialPending) * 100))
+      ? Math.min(100, Math.round((sessionDone / progress.initialPending) * 100))
       : 0;
 
   const [autoEnabled, setAutoEnabled] = useState(Boolean(autoSettings?.enabled));
@@ -1656,14 +1655,27 @@ const CrawlerIngestPanel = ({
             自动入库（北京时间）
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#aaa' }}>
+            <label
+              style={{
+                display: 'inline-flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 12,
+                color: '#aaa',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                lineHeight: 1.4,
+              }}
+            >
               <input
                 type="checkbox"
                 checked={autoEnabled}
                 disabled={busy || autoSaving}
                 onChange={(e) => setAutoEnabled(e.target.checked)}
+                style={{ flexShrink: 0 }}
               />
-              每日自动入库
+              <span>每日自动入库</span>
             </label>
             <select
               value={autoHour}
@@ -1740,12 +1752,25 @@ const CrawlerIngestPanel = ({
             border: '1px solid #3db8d9',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#7ee8fc', marginBottom: 8 }}>
-            <span style={{ fontWeight: 700 }}>入库进行中（逐条处理）…</span>
-            <span style={{ color: '#bde8f5' }}>
-              约完成 {doneEstimate} / {progress.initialPending}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#7ee8fc', marginBottom: 8, gap: 12 }}>
+            <span style={{ fontWeight: 700 }}>入库进行中…</span>
+            <span style={{ color: '#bde8f5', whiteSpace: 'nowrap' }}>
+              本次 {sessionDone} / {progress.initialPending}
             </span>
           </div>
+          {progress.currentTitle ? (
+            <div
+              style={{
+                fontSize: 13,
+                color: '#fff',
+                marginBottom: 8,
+                lineHeight: 1.45,
+                wordBreak: 'break-all',
+              }}
+            >
+              正在入库：{progress.currentTitle}
+            </div>
+          ) : null}
           <div style={{ height: 6, background: '#0d2a33', borderRadius: 3, overflow: 'hidden' }}>
             <div
               style={{
@@ -1756,8 +1781,12 @@ const CrawlerIngestPanel = ({
               }}
             />
           </div>
-          <p style={{ marginTop: 8, fontSize: 11, color: '#aaa' }}>
-            待入库 {pendingCount} · 处理中 {processingCount} · 失败 {failedCount}
+          <p style={{ marginTop: 8, fontSize: 11, color: '#aaa', lineHeight: 1.5 }}>
+            本次成功 {progress.sessionSucceeded ?? 0} · 本次失败 {progress.sessionFailed ?? 0}
+            {progress.currentIndex > 0 ? ` · 当前第 ${progress.currentIndex} 条` : ''}
+          </p>
+          <p style={{ marginTop: 4, fontSize: 11, color: '#888' }}>
+            队列：待入库 {pendingCount} · 处理中 {processingCount} · 失败 {failedCount}
           </p>
         </div>
       ) : null}
@@ -1940,6 +1969,24 @@ const CrawlerIngestPanel = ({
             清空选择
           </button>
         ) : null}
+        {busy && onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid #f87171',
+              background: 'transparent',
+              color: '#f87171',
+              fontSize: 12,
+              fontWeight: 'bold',
+              cursor: 'pointer',
+            }}
+          >
+            停止入库
+          </button>
+        ) : null}
       </div>
 
       <p style={{ fontSize: 11, color: '#777', marginBottom: 12, lineHeight: 1.5 }}>
@@ -2007,7 +2054,11 @@ const AdminHeaderActionsMenu = ({
     fullRedeployCooldownSec > 0 ||
     !fullRedeployConfigured;
   const crawlerIngestDisabled = isThemeLoading || !crawlerIngestConfigured;
-  const ingestListDisabled = isThemeLoading || !crawlerIngestConfigured;
+  const crawlerSessionDone =
+    crawlerIngestProgress
+      ? (crawlerIngestProgress.sessionSucceeded ?? 0) +
+        (crawlerIngestProgress.sessionFailed ?? 0)
+      : 0;
 
   const runAndClose = (fn) => {
     onClose();
@@ -2084,39 +2135,27 @@ const AdminHeaderActionsMenu = ({
             title={
               !crawlerIngestConfigured
                 ? '未配置 Supabase 图库租户，请联系管理'
-                : '打开爬虫入库管理：待入库列表、勾选入库与记录'
+                : '爬虫入库管理：待入库、处理中、失败与入库记录'
             }
           >
             {crawlerIngestBusy && crawlerIngestProgress ? (
               <>
                 入库中
                 <span className="header-actions-menu-item__hint">
-                  待入库 {crawlerIngestSummary?.pending ?? 0} · 处理中{' '}
-                  {crawlerIngestSummary?.processing ?? 0}
+                  本次 {crawlerSessionDone} / {crawlerIngestProgress.initialPending}
+                  {crawlerIngestProgress.currentTitle
+                    ? ` · ${crawlerIngestProgress.currentTitle}`
+                    : ''}
                 </span>
               </>
             ) : (
-              '爬虫入库'
+              '爬虫管理'
             )}
             {crawlerIngestConfigured && crawlerIngestSummary && !crawlerIngestBusy ? (
               <span className="header-actions-menu-item__hint">
-                待入库 {crawlerIngestSummary.pending ?? 0} · 已完成 {crawlerIngestSummary.done ?? 0}
-              </span>
-            ) : null}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="header-actions-menu-item"
-            disabled={ingestListDisabled}
-            onClick={() => runAndClose(onOpenIngestList)}
-            title="查看待入库与入库记录"
-          >
-            入库列表
-            {crawlerIngestConfigured && crawlerIngestSummary ? (
-              <span className="header-actions-menu-item__hint">
-                失败 {crawlerIngestSummary.failed ?? 0} · 处理中{' '}
-                {crawlerIngestSummary.processing ?? 0}
+                待入库 {crawlerIngestSummary.pending ?? 0} · 处理中{' '}
+                {crawlerIngestSummary.processing ?? 0} · 失败{' '}
+                {crawlerIngestSummary.failed ?? 0}
               </span>
             ) : null}
           </button>
@@ -3564,6 +3603,7 @@ const [mounted, setMounted] = useState(false);
   const [crawlerIngestSelectedIds, setCrawlerIngestSelectedIds] = useState([]);
   const [crawlerIngestProgress, setCrawlerIngestProgress] = useState(null);
   const crawlerIngestPollRef = useRef(null);
+  const crawlerIngestCancelRef = useRef(false);
   const [listSelectMode, setListSelectMode] = useState(false);
   const [selectedPostIds, setSelectedPostIds] = useState([]);
   const [headerActionsMenuOpen, setHeaderActionsMenuOpen] = useState(false);
@@ -4859,7 +4899,39 @@ const [mounted, setMounted] = useState(false);
     );
   };
 
-  const runCrawlerIngestRequest = async (body) => {
+  const cancelCrawlerIngest = () => {
+    crawlerIngestCancelRef.current = true;
+    showAdminToast('正在停止入库…');
+  };
+
+  const ingestOneCrawlerRow = async (id, deferShellRefresh = true) => {
+    const res = await fetchWithTimeout(
+      '/api/admin/crawler-ingest',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'ingest',
+          ids: [id],
+          deferShellRefresh,
+        }),
+      },
+      CRAWLER_INGEST_FETCH_TIMEOUT_MS
+    );
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return { ok: false, error: data.error || '爬虫入库失败', data };
+    }
+    applyCrawlerIngestPayload(data);
+    const item = data.items?.[0];
+    const succeeded =
+      item?.status === 'done' ? 1 : data.succeeded > 0 ? data.succeeded : 0;
+    const failed =
+      item?.status === 'failed' ? 1 : data.failed > 0 ? data.failed : 0;
+    return { ok: true, succeeded, failed, data };
+  };
+
+  const runCrawlerIngestLoop = async ({ mode, ids: explicitIds }) => {
     if (isThemeLoading || crawlerIngestBusy) {
       showAdminToast('入库任务进行中，请勿重复点击');
       return;
@@ -4869,55 +4941,124 @@ const [mounted, setMounted] = useState(false);
       return;
     }
 
-    const initialPending =
-      body.action === 'ingestAll'
-        ? crawlerIngestSummary?.pending ?? 0
-        : (body.ids?.length ?? 0);
-
-    if (body.action === 'ingest' && !body.ids?.length) {
-      showAdminToast('请先选择待入库条目');
-      return;
-    }
-    if (body.action === 'ingestAll' && initialPending <= 0) {
-      showAdminToast('暂无待入库内容');
-      return;
+    let initialPending = 0;
+    if (mode === 'all') {
+      const fresh = await fetchCrawlerIngestTab('pending');
+      initialPending = fresh?.summary?.pending ?? fresh?.pendingItems?.length ?? 0;
+    } else {
+      initialPending = explicitIds?.length ?? 0;
     }
 
+    if (initialPending <= 0) {
+      showAdminToast(mode === 'all' ? '暂无待入库内容' : '请先选择待入库条目');
+      return;
+    }
+
+    crawlerIngestCancelRef.current = false;
     setCrawlerIngestBusy(true);
-    setCrawlerIngestProgress({ initialPending });
+    setCrawlerIngestProgress({
+      initialPending,
+      sessionSucceeded: 0,
+      sessionFailed: 0,
+      currentTitle: '',
+      currentIndex: 0,
+    });
 
     if (crawlerIngestPollRef.current) clearInterval(crawlerIngestPollRef.current);
     crawlerIngestPollRef.current = setInterval(() => {
       void fetchCrawlerIngestTab(crawlerIngestTab);
     }, CRAWLER_INGEST_POLL_MS);
 
+    let sessionSucceeded = 0;
+    let sessionFailed = 0;
+    let currentIndex = 0;
+
     try {
       showAdminToast(
-        body.action === 'ingestAll'
+        mode === 'all'
           ? `开始逐条入库 ${initialPending} 条…`
           : `开始入库所选 ${initialPending} 条…`
       );
 
-      const res = await fetchWithTimeout(
-        '/api/admin/crawler-ingest',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        },
-        CRAWLER_INGEST_FETCH_TIMEOUT_MS
-      );
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || '爬虫入库失败');
+      if (mode === 'all') {
+        while (!crawlerIngestCancelRef.current) {
+          const data = await fetchCrawlerIngestTab('pending');
+          const pending = data?.pendingItems ?? [];
+          if (!pending.length) break;
 
-      applyCrawlerIngestPayload(data);
+          const row = pending[0];
+          currentIndex += 1;
+          setCrawlerIngestProgress((p) => ({
+            ...p,
+            currentTitle: row.title || row.slug || row.id,
+            currentIndex,
+          }));
+
+          const result = await ingestOneCrawlerRow(row.id, true);
+          if (!result.ok) {
+            sessionFailed += 1;
+            console.warn('crawler ingest row failed', row.id, result.error);
+          } else {
+            sessionSucceeded += result.succeeded;
+            sessionFailed += result.failed;
+          }
+
+          setCrawlerIngestProgress((p) => ({
+            ...p,
+            sessionSucceeded,
+            sessionFailed,
+          }));
+        }
+      } else {
+        const workIds = [...explicitIds];
+        const titleMap = {};
+        for (const r of crawlerIngestPendingList) {
+          if (workIds.includes(r.id)) titleMap[r.id] = r.title || r.slug;
+        }
+        for (const r of crawlerIngestFailedList) {
+          if (workIds.includes(r.id)) titleMap[r.id] = r.title || r.slug;
+        }
+
+        for (const id of workIds) {
+          if (crawlerIngestCancelRef.current) break;
+
+          currentIndex += 1;
+          setCrawlerIngestProgress((p) => ({
+            ...p,
+            currentTitle: titleMap[id] || id,
+            currentIndex,
+          }));
+
+          const result = await ingestOneCrawlerRow(id, true);
+          if (!result.ok) {
+            sessionFailed += 1;
+            console.warn('crawler ingest row failed', id, result.error);
+          } else {
+            sessionSucceeded += result.succeeded;
+            sessionFailed += result.failed;
+          }
+
+          setCrawlerIngestProgress((p) => ({
+            ...p,
+            sessionSucceeded,
+            sessionFailed,
+          }));
+        }
+      }
+
       await fetchPosts();
+      if (sessionSucceeded > 0) {
+        const rev = await triggerShellBlogRefresh({ contentChange: true });
+        if (rev?.error) console.warn('壳层刷新失败', rev.error);
+      }
 
-      const stale = data.staleFailed ?? 0;
-      const msg = `入库结束：成功 ${data.succeeded ?? 0}，失败 ${data.failed ?? 0}`;
+      const cancelled = crawlerIngestCancelRef.current;
       showAdminToast(
-        stale > 0 ? `${msg}；纠正卡住 ${stale} 条` : msg
+        cancelled
+          ? `已停止：本次成功 ${sessionSucceeded}，失败 ${sessionFailed}`
+          : `入库结束：本次成功 ${sessionSucceeded}，失败 ${sessionFailed}`
       );
+      await fetchCrawlerIngestTab(crawlerIngestTab);
     } catch (e) {
       showAdminToast(e?.message || '爬虫入库失败');
       await fetchCrawlerIngestTab(crawlerIngestTab);
@@ -4929,16 +5070,17 @@ const [mounted, setMounted] = useState(false);
       setCrawlerIngestBusy(false);
       setCrawlerIngestProgress(null);
       setCrawlerIngestSelectedIds([]);
+      crawlerIngestCancelRef.current = false;
     }
   };
 
   const handleCrawlerIngestAll = async () => {
-    await runCrawlerIngestRequest({ action: 'ingestAll' });
+    await runCrawlerIngestLoop({ mode: 'all' });
   };
 
   const handleCrawlerIngestSelected = async () => {
-    await runCrawlerIngestRequest({
-      action: 'ingest',
+    await runCrawlerIngestLoop({
+      mode: 'selected',
       ids: [...crawlerIngestSelectedIds],
     });
   };
@@ -5958,6 +6100,7 @@ const [mounted, setMounted] = useState(false);
             onRetrySelected={handleCrawlerRetrySelected}
             onReclaimStale={handleCrawlerReclaimStale}
             onResetProcessingSelected={handleCrawlerResetProcessingSelected}
+            onCancel={cancelCrawlerIngest}
             onRetry={handleCrawlerIngestRetry}
             onRefresh={refreshCrawlerIngestPanel}
             onBack={leaveCrawlerIngestView}

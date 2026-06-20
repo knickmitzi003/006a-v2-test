@@ -138,26 +138,28 @@ export default async function handler(req, res) {
         return res.status(200).json({ ...payload, deleted })
       }
 
-      const ingestAll = body.action === 'ingestAll'
       const ingestIds =
         body.action === 'ingest' && Array.isArray(body.ids) && body.ids.length
           ? body.ids.map((id) => String(id))
           : undefined
 
-      if (!ingestAll && body.action === 'ingest' && !ingestIds) {
+      if (body.action === 'ingest' && !ingestIds?.length) {
         return res.status(400).json({
           success: false,
-          error: '缺少 ids 或使用 ingestAll',
+          error: '缺少 ids',
         })
       }
 
+      const deferShellRefresh = Boolean(body.deferShellRefresh)
       const result = await runCrawlerIngestJob(res, {
-        ids: ingestAll ? undefined : ingestIds,
-        continuous: true,
+        ids: ingestIds,
+        continuous: ingestIds.length > 1,
+        deferShellRefresh,
+        maxDurationMs: ingestIds.length === 1 ? 270_000 : undefined,
       })
 
       const tab =
-        ingestAll || ingestIds
+        ingestIds
           ? 'pending'
           : typeof body.tab === 'string'
             ? body.tab
