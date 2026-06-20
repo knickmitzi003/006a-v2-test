@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { getCrawlerQueueSummary } from '@/src/lib/ingest/crawlerQueueDb'
+import { shouldRunScheduledCrawlerIngest } from '@/src/lib/ingest/crawlerIngestSettings'
 import { runCrawlerIngestJob } from '@/src/lib/ingest/runCrawlerIngestJob'
 
 export const config = {
@@ -34,19 +35,34 @@ export default async function handler(
 
   try {
     if (req.method === 'GET') {
-      // 仅查询队列状态（手动探活）；Vercel Cron 使用 GET，默认应执行入库
       const summaryOnly =
         req.query.status === '1' || req.query.summary === '1'
       if (summaryOnly) {
         const summary = await getCrawlerQueueSummary()
         return res.status(200).json({ success: true, summary })
       }
-      const result = await runCrawlerIngestJob(res)
+
+      const scheduled = req.query.auto === '1' || req.query.scheduled === '1'
+      if (scheduled && !await shouldRunScheduledCrawlerIngest()) {
+        const summary = await getCrawlerQueueSummary()
+        return res.status(200).json({
+          success: true,
+          skipped: true,
+          reason: 'not_scheduled_hour',
+          summary,
+        })
+      }
+
+      const result = await runCrawlerIngestJob(res, {
+        continuous: true,
+      })
       return res.status(200).json({ success: true, ...result })
     }
 
     if (req.method === 'POST') {
-      const result = await runCrawlerIngestJob(res)
+      const result = await runCrawlerIngestJob(res, {
+        continuous: true,
+      })
       return res.status(200).json({ success: true, ...result })
     }
 

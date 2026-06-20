@@ -8,6 +8,12 @@ export type CrawlerQueueStatus =
   | 'failed'
   | 'skipped'
 
+/** 处理中超过此时长视为卡住，自动标记失败 */
+export const CRAWLER_PROCESSING_STALE_MS = 5 * 60 * 1000
+
+const STALE_FAIL_MESSAGE =
+  '处理超时（超过 5 分钟无更新），已自动标记为失败，可重试入库'
+
 export type CrawlerQueueRow = {
   id: string
   site_id: string
@@ -103,6 +109,75 @@ export async function listAllPendingCrawlerQueueRows(
   return (data || []).map((row) => mapRow(row as Record<string, unknown>))
 }
 
+export async function listProcessingCrawlerQueueRows(
+  limit = 100
+): Promise<CrawlerQueueRow[]> {
+  const sb = getSupabaseAdmin()
+  const siteId = getBlogSiteIdOrNull()
+  if (!sb || !siteId) return []
+
+  const safeLimit = Math.min(Math.max(limit, 1), 500)
+  const { data, error } = await sb
+    .from('crawler_ingest_queue')
+    .select('*')
+    .eq('site_id', siteId)
+    .eq('status', 'processing')
+    .order('updated_at', { ascending: true })
+    .limit(safeLimit)
+
+  if (error) throw error
+  return (data || []).map((row) => mapRow(row as Record<string, unknown>))
+}
+
+export async function listFailedCrawlerQueueRows(
+  limit = 200
+): Promise<CrawlerQueueRow[]> {
+  const sb = getSupabaseAdmin()
+  const siteId = getBlogSiteIdOrNull()
+  if (!sb || !siteId) return []
+
+  const safeLimit = Math.min(Math.max(limit, 1), 500)
+  const { data, error } = await sb
+    .from('crawler_ingest_queue')
+    .select('*')
+    .eq('site_id', siteId)
+    .eq('status', 'failed')
+    .order('updated_at', { ascending: false })
+    .limit(safeLimit)
+
+  if (error) throw error
+  return (data || []).map((row) => mapRow(row as Record<string, unknown>))
+}
+
+/**
+ * 将卡在 processing 超过 maxAgeMs 的行标记为 failed
+ */
+export async function failStaleProcessingRows(
+  maxAgeMs = CRAWLER_PROCESSING_STALE_MS
+): Promise<number> {
+  const sb = getSupabaseAdmin()
+  const siteId = getBlogSiteIdOrNull()
+  if (!sb || !siteId) return 0
+
+  const cutoff = new Date(Date.now() - maxAgeMs).toISOString()
+  const now = new Date().toISOString()
+  const { data, error } = await sb
+    .from('crawler_ingest_queue')
+    .update({
+      status: 'failed',
+      error_message: STALE_FAIL_MESSAGE,
+      processed_at: now,
+      updated_at: now,
+    })
+    .eq('site_id', siteId)
+    .eq('status', 'processing')
+    .lt('updated_at', cutoff)
+    .select('id')
+
+  if (error) throw error
+  return data?.length ?? 0
+}
+
 /**
  * 原子抢占待入库行（pending → processing），避免并发重复入库
  */
@@ -114,7 +189,7 @@ export async function claimCrawlerQueueRows(options?: {
   const siteId = getBlogSiteIdOrNull()
   if (!sb || !siteId) return []
 
-  const maxClaim = Math.min(Math.max(options?.limit ?? 20, 1), 50)
+  const maxClaim = Math.min(Math.max(options?.limit ?? 1, 1), 50)
   let candidateQuery = sb
     .from('crawler_ingest_queue')
     .select('id')
@@ -229,6 +304,54 @@ export async function retryCrawlerQueueRow(id: string): Promise<void> {
     error_message: null,
     processed_at: null,
   })
+}
+
+export async function retryCrawlerQueueRows(ids: string[]): Promise<number> {
+  if (!ids.length) return 0
+  const sb = getSupabaseAdmin()
+  if (!sb) throw new Error('Supabase 未配置')
+  const siteId = getBlogSiteId()
+  const now = new Date().toISOString()
+
+  const { data, error } = await sb
+    .from('crawler_ingest_queue')
+    .update({
+      status: 'pending',
+      error_message: null,
+      processed_at: null,
+      updated_at: now,
+    })
+    .eq('site_id', siteId)
+    .in('id', ids)
+    .in('status', ['failed', 'done', 'processing'])
+    .select('id')
+
+  if (error) throw error
+  return data?.length ?? 0
+}
+
+export async function resetProcessingRowsToPending(ids: string[]): Promise<number> {
+  if (!ids.length) return 0
+  const sb = getSupabaseAdmin()
+  if (!sb) throw new Error('Supabase 未配置')
+  const siteId = getBlogSiteId()
+  const now = new Date().toISOString()
+
+  const { data, error } = await sb
+    .from('crawler_ingest_queue')
+    .update({
+      status: 'pending',
+      error_message: null,
+      processed_at: null,
+      updated_at: now,
+    })
+    .eq('site_id', siteId)
+    .eq('status', 'processing')
+    .in('id', ids)
+    .select('id')
+
+  if (error) throw error
+  return data?.length ?? 0
 }
 
 export async function markCrawlerQueueRow(

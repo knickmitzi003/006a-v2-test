@@ -10,6 +10,7 @@ import { isGalleryTenantConfigured } from '@/src/lib/gallery/blogSite'
 import { loadOccupiedPostSlugs } from '@/src/lib/blog/generateAdminPostSlug'
 import {
   claimCrawlerQueueRows,
+  failStaleProcessingRows,
   markCrawlerQueueRow,
   type CrawlerQueueRow,
 } from '@/src/lib/ingest/crawlerQueueDb'
@@ -32,15 +33,11 @@ export type CrawlerIngestRunResult = {
   succeeded: number
   failed: number
   skipped: number
+  staleFailed: number
   items: CrawlerIngestRunItem[]
 }
 
-function parseBatchSize(): number {
-  const raw = process.env.CRAWLER_INGEST_BATCH_SIZE?.trim()
-  const n = raw ? parseInt(raw, 10) : 20
-  if (!Number.isFinite(n) || n < 1) return 20
-  return Math.min(n, 50)
-}
+const DEFAULT_MAX_DURATION_MS = 280_000
 
 async function revalidatePost(
   res: NextApiResponse,
@@ -122,33 +119,64 @@ async function processOneRow(
 
 export async function runCrawlerIngestJob(
   res: NextApiResponse,
-  options?: { ids?: string[] }
+  options?: {
+    ids?: string[]
+    /** 逐条处理直至无待入库或超时 */
+    continuous?: boolean
+    maxDurationMs?: number
+  }
 ): Promise<CrawlerIngestRunResult> {
   if (!isGalleryTenantConfigured()) {
     throw new Error('爬虫入库未配置（需 Supabase + BLOG_SITE_ID）')
   }
 
-  const batchSize = parseBatchSize()
-  const claimLimit = options?.ids?.length
-    ? Math.min(options.ids.length, 50)
-    : batchSize
-  const pending = await claimCrawlerQueueRows({
-    ids: options?.ids,
-    limit: claimLimit,
-  })
-  const occupiedSlugs = await loadOccupiedPostSlugs()
+  const staleFailed = await failStaleProcessingRows()
+  const continuous = options?.continuous ?? false
+  const maxDurationMs = options?.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
+  const start = Date.now()
 
+  const occupiedSlugs = await loadOccupiedPostSlugs()
   const items: CrawlerIngestRunItem[] = []
   let succeeded = 0
   let failed = 0
   let skipped = 0
 
-  for (const row of pending) {
-    const item = await processOneRow(row, res, occupiedSlugs)
-    items.push(item)
-    if (item.status === 'done') succeeded += 1
-    else if (item.status === 'failed') failed += 1
-    else skipped += 1
+  const targetIds = options?.ids?.length
+    ? [...new Set(options.ids.filter(Boolean))]
+    : null
+  let remainingIds = targetIds ? [...targetIds] : null
+
+  while (true) {
+    if (Date.now() - start > maxDurationMs) break
+
+    await failStaleProcessingRows()
+
+    let claimed: CrawlerQueueRow[] = []
+
+    if (remainingIds) {
+      if (remainingIds.length === 0) break
+      const tryId = remainingIds[0]
+      remainingIds = remainingIds.slice(1)
+      claimed = await claimCrawlerQueueRows({ ids: [tryId], limit: 1 })
+      if (!claimed.length) {
+        if (continuous || targetIds) continue
+        break
+      }
+    } else {
+      claimed = await claimCrawlerQueueRows({ limit: 1 })
+      if (!claimed.length) break
+    }
+
+    for (const row of claimed) {
+      const item = await processOneRow(row, res, occupiedSlugs)
+      items.push(item)
+      if (item.status === 'done') succeeded += 1
+      else if (item.status === 'failed') failed += 1
+      else skipped += 1
+    }
+
+    if (!continuous && !targetIds) break
+    if (targetIds && !continuous) break
   }
 
   if (succeeded > 0) {
@@ -164,6 +192,7 @@ export async function runCrawlerIngestJob(
     succeeded,
     failed,
     skipped,
+    staleFailed,
     items,
   }
 }

@@ -1,16 +1,65 @@
 import { verifyAdminRequest } from '@/src/lib/admin/verifyAdminRequest'
 import { isGalleryTenantConfigured } from '@/src/lib/gallery/blogSite'
 import {
+  getCrawlerIngestAutoSettings,
+  updateCrawlerIngestAutoSettings,
+} from '@/src/lib/ingest/crawlerIngestSettings'
+import {
   deleteCrawlerQueueRows,
+  failStaleProcessingRows,
   getCrawlerQueueSummary,
   listAllPendingCrawlerQueueRows,
+  listFailedCrawlerQueueRows,
+  listProcessingCrawlerQueueRows,
   listRecentCrawlerQueueRows,
+  resetProcessingRowsToPending,
   retryCrawlerQueueRow,
+  retryCrawlerQueueRows,
 } from '@/src/lib/ingest/crawlerQueueDb'
 import { runCrawlerIngestJob } from '@/src/lib/ingest/runCrawlerIngestJob'
 
 export const config = {
   maxDuration: 300,
+}
+
+async function buildPanelPayload(tab) {
+  const staleFailed = await failStaleProcessingRows()
+  const summary = await getCrawlerQueueSummary()
+  const autoSettings = await getCrawlerIngestAutoSettings()
+
+  const payload = {
+    success: true,
+    configured: isGalleryTenantConfigured(),
+    summary,
+    autoSettings,
+    staleFailed,
+  }
+
+  if (tab === 'pending') {
+    return {
+      ...payload,
+      pendingItems: await listAllPendingCrawlerQueueRows(500),
+    }
+  }
+
+  if (tab === 'processing') {
+    return {
+      ...payload,
+      processingItems: await listProcessingCrawlerQueueRows(200),
+    }
+  }
+
+  if (tab === 'failed') {
+    return {
+      ...payload,
+      failedItems: await listFailedCrawlerQueueRows(200),
+    }
+  }
+
+  return {
+    ...payload,
+    items: await listRecentCrawlerQueueRows(100),
+  }
 }
 
 export default async function handler(req, res) {
@@ -20,24 +69,9 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const summary = await getCrawlerQueueSummary()
-      const tab = typeof req.query.tab === 'string' ? req.query.tab : ''
-      if (tab === 'pending') {
-        const pendingItems = await listAllPendingCrawlerQueueRows(500)
-        return res.status(200).json({
-          success: true,
-          configured: isGalleryTenantConfigured(),
-          summary,
-          pendingItems,
-        })
-      }
-      const items = await listRecentCrawlerQueueRows(100)
-      return res.status(200).json({
-        success: true,
-        configured: isGalleryTenantConfigured(),
-        summary,
-        items,
-      })
+      const tab = typeof req.query.tab === 'string' ? req.query.tab : 'log'
+      const payload = await buildPanelPayload(tab)
+      return res.status(200).json(payload)
     }
 
     if (req.method === 'POST') {
@@ -46,46 +80,93 @@ export default async function handler(req, res) {
           ? JSON.parse(req.body || '{}')
           : req.body || {}
 
+      if (body.action === 'updateAutoSettings') {
+        const enabled = Boolean(body.enabled)
+        const hour =
+          typeof body.hour === 'number'
+            ? body.hour
+            : parseInt(String(body.hour ?? '3'), 10)
+        const autoSettings = await updateCrawlerIngestAutoSettings({
+          enabled,
+          hour,
+        })
+        const summary = await getCrawlerQueueSummary()
+        return res.status(200).json({
+          success: true,
+          autoSettings,
+          summary,
+        })
+      }
+
+      if (body.action === 'reclaimStale') {
+        const staleFailed = await failStaleProcessingRows()
+        const payload = await buildPanelPayload(
+          typeof body.tab === 'string' ? body.tab : 'processing'
+        )
+        return res.status(200).json({ ...payload, staleFailed })
+      }
+
+      if (body.action === 'resetProcessing' && Array.isArray(body.ids) && body.ids.length) {
+        const reset = await resetProcessingRowsToPending(
+          body.ids.map((id) => String(id))
+        )
+        const payload = await buildPanelPayload('processing')
+        return res.status(200).json({ ...payload, reset })
+      }
+
       if (body.action === 'retry' && body.id) {
         await retryCrawlerQueueRow(String(body.id))
-        const summary = await getCrawlerQueueSummary()
-        const items = await listRecentCrawlerQueueRows(100)
-        return res.status(200).json({ success: true, summary, items })
+        const payload = await buildPanelPayload(
+          typeof body.tab === 'string' ? body.tab : 'failed'
+        )
+        return res.status(200).json(payload)
+      }
+
+      if (body.action === 'retry' && Array.isArray(body.ids) && body.ids.length) {
+        const retried = await retryCrawlerQueueRows(
+          body.ids.map((id) => String(id))
+        )
+        const payload = await buildPanelPayload('failed')
+        return res.status(200).json({ ...payload, retried })
       }
 
       if (body.action === 'delete' && Array.isArray(body.ids) && body.ids.length) {
         const deleted = await deleteCrawlerQueueRows(
           body.ids.map((id) => String(id))
         )
-        const summary = await getCrawlerQueueSummary()
-        const pendingItems = await listAllPendingCrawlerQueueRows(500)
-        const items = await listRecentCrawlerQueueRows(100)
-        return res.status(200).json({
-          success: true,
-          deleted,
-          summary,
-          pendingItems,
-          items,
-        })
+        const payload = await buildPanelPayload('pending')
+        return res.status(200).json({ ...payload, deleted })
       }
 
+      const ingestAll = body.action === 'ingestAll'
       const ingestIds =
         body.action === 'ingest' && Array.isArray(body.ids) && body.ids.length
           ? body.ids.map((id) => String(id))
           : undefined
 
+      if (!ingestAll && body.action === 'ingest' && !ingestIds) {
+        return res.status(400).json({
+          success: false,
+          error: '缺少 ids 或使用 ingestAll',
+        })
+      }
+
       const result = await runCrawlerIngestJob(res, {
-        ids: ingestIds,
+        ids: ingestAll ? undefined : ingestIds,
+        continuous: true,
       })
-      const summary = await getCrawlerQueueSummary()
-      const pendingItems = await listAllPendingCrawlerQueueRows(500)
-      const items = await listRecentCrawlerQueueRows(100)
+
+      const tab =
+        ingestAll || ingestIds
+          ? 'pending'
+          : typeof body.tab === 'string'
+            ? body.tab
+            : 'log'
+      const payload = await buildPanelPayload(tab)
       return res.status(200).json({
         success: true,
         ...result,
-        summary,
-        pendingItems,
-        items,
+        ...payload,
       })
     }
 
